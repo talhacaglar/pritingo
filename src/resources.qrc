@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="Main.qml">Main.qml</file>
+        <file alias="TopBar.qml">TopBar.qml</file>
+        <file alias="EmptyState.qml">EmptyState.qml</file>
+        <file alias="SheetsView.qml">SheetsView.qml</file>
+        <file alias="Segmented.qml">Segmented.qml</file>
+        <file alias="AccentButton.qml">AccentButton.qml</file>
+        <file alias="SettingsPanel.qml">SettingsPanel.qml</file>
+        <file alias="PrintingOverlay.qml">PrintingOverlay.qml</file>
+        <file alias="FlipOverlay.qml">FlipOverlay.qml</file>
+        <file alias="FinishedOverlay.qml">FinishedOverlay.qml</file>
+        <file alias="PagePreview.qml">PagePreview.qml</file>
+        <file alias="HelpOverlay.qml">HelpOverlay.qml</file>
+        <file alias="i18n/en.json">i18n/en.json</file>
+        <file alias="i18n/tr.json">i18n/tr.json</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,34 @@
+{
+  "%n page(s) printed": {
+    "one": "%n page printed",
+    "other": "%n pages printed"
+  },
+  "Put back <b>%n printed sheet(s)</b>, printed side facing away from you, blank side towards you.": {
+    "one": "Put back <b>%n printed sheet</b>, printed side facing away from you, blank side towards you.",
+    "other": "Put back <b>%n printed sheets</b>, printed side facing away from you, blank side towards you."
+  },
+  "%n page(s)": {
+    "one": "%n page",
+    "other": "%n pages"
+  },
+  "%n sheet(s)": {
+    "one": "%n sheet",
+    "other": "%n sheets"
+  },
+  "about %n min": {
+    "one": "about %n min",
+    "other": "about %n min"
+  },
+  "%1 · %n job(s) waiting": {
+    "one": "%1 · %n job waiting",
+    "other": "%1 · %n jobs waiting"
+  },
+  "The fronts are done. Put %n sheet(s) back in the tray, printed side away from you, then press Continue.": {
+    "one": "The fronts are done. Put %n sheet back in the tray, printed side away from you, then press Continue.",
+    "other": "The fronts are done. Put %n sheets back in the tray, printed side away from you, then press Continue."
+  },
+  "%n page(s) of “%1” are ready.": {
+    "one": "%n page of “%1” is ready.",
+    "other": "%n pages of “%1” are ready."
+  }
+}

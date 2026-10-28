@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#FFD60A"/>
+  <!-- the back sheet, already printed -->
+  <rect x="14" y="13" width="26" height="34" rx="2" fill="#1c1c1f" opacity="0.32" transform="rotate(-8 27 30)"/>
+  <!-- the front sheet with its corner turning over -->
+  <path d="M22 16h22l0 30a2 2 0 0 1-2 2H24a2 2 0 0 1-2-2z" fill="#fff"/>
+  <path d="M44 16v12l-10-12z" fill="#1c1c1f" opacity="0.18"/>
+  <path d="M34 16h10L34 28z" fill="#e8e8ec"/>
+  <g stroke="#1c1c1f" stroke-width="2.4" stroke-linecap="round">
+    <line x1="26" y1="27" x2="31" y2="27"/>
+    <line x1="26" y1="32" x2="40" y2="32"/>
+    <line x1="26" y1="37" x2="40" y2="37"/>
+    <line x1="26" y1="42" x2="35" y2="42"/>
+  </g>
+</svg>

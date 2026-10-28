@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Baskı
+Name[tr]=Baskı
+Comment=Print documents and pictures, one-sided or two-sided
+Comment[tr]=Belge ve resimleri tek yüz ya da arkalı önlü yazdır
+Exec=baski %f
+Icon=baski
+Terminal=false
+Categories=Utility;Office;
+Keywords=print;printer;duplex;two-sided;yazdır;yazıcı;arkalı;önlü;
+MimeType=application/pdf;image/jpeg;image/png;image/webp;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;
+StartupWMClass=baski
