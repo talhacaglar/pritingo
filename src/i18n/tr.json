@@ -190,5 +190,7 @@
   "BACK": "ARKA",
   "Printable files": "Yazdırılabilir dosyalar",
   "All files": "Bütün dosyalar",
-  "The file chooser is not available: %1": "Dosya seçici kullanılamıyor: %1"
+  "The file chooser is not available: %1": "Dosya seçici kullanılamıyor: %1",
+  "left out · click to add back": "çıkarıldı · geri eklemek için tıkla",
+  "No page is selected. Press All, or click a page to add it back.": "Hiç sayfa seçili değil. Tümü'ne bas ya da geri eklemek için sayfaya tıkla."
 }

@@ -225,6 +225,7 @@ Rectangle {
                     wrapMode: Text.WordWrap
                     text: backend.pageCount === 0 ? qsTr("Open a file to start.")
                         : !backend.rangeValid ? qsTr("Check the page numbers.")
+                        : backend.pagesToPrint === 0 ? qsTr("No page is selected. Press All, or click a page to add it back.")
                         : qsTr("%n page(s)", "", backend.pagesToPrint) + "  ·  "
                           + qsTr("%n sheet(s)", "", backend.sheetCount) + "  ·  "
                           + qsTr("about %n min", "", backend.estimateMinutes)

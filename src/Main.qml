@@ -7,8 +7,8 @@ ApplicationWindow {
     id: win
     width: 1180
     height: 760
-    minimumWidth: 860
-    minimumHeight: 560
+    minimumWidth: 640
+    minimumHeight: 480
     visible: true
     title: backend.fileName ? backend.fileName + " — Pritingo" : "Pritingo"
     color: "#0e0e10"
@@ -124,7 +124,9 @@ ApplicationWindow {
 
                 SettingsPanel {
                     Layout.fillHeight: true
-                    Layout.preferredWidth: 360
+                    // Narrower when Hyprland tiles the window small, so the
+                    // pages keep most of the room.
+                    Layout.preferredWidth: Math.round(Math.max(290, Math.min(380, win.width * 0.36)))
                 }
             }
         }

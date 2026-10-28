@@ -27,15 +27,20 @@ Item {
                 onPicked: (v) => root.modeRequested(v)
             }
 
-            Item { Layout.fillWidth: true }
-
+            // Takes whatever room is left when the window is tiled narrow:
+            // wraps to two lines, then elides, and never runs under the panel.
             Label {
+                Layout.fillWidth: true
+                visible: root.width > 420
                 color: win.muted
+                font.pixelSize: 13
+                horizontalAlignment: Text.AlignRight
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
                 text: root.mode === "pages"
                       ? qsTr("Click a page to leave it out · double-click to look closer")
                       : backend.options.duplex ? qsTr("How the pages land on paper") : qsTr("One page on each sheet")
-                elide: Text.ElideRight
-                Layout.maximumWidth: 420
             }
         }
 
@@ -47,7 +52,7 @@ Item {
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
 
-            readonly property int columns: Math.max(1, Math.floor(width / (root.mode === "pages" ? 180 : 330)))
+            readonly property int columns: Math.max(1, Math.floor(width / (root.mode === "pages" ? 170 : 310)))
             cellWidth: Math.floor(width / columns)
             cellHeight: root.mode === "pages" ? cellWidth * 1.42 + 34 : (cellWidth - 40) / 2 * 1.42 + 74
 
@@ -156,7 +161,7 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: win.muted
                 font.pixelSize: 12
-                text: !parent.included ? qsTr("left out")
+                text: !parent.included ? qsTr("left out · click to add back")
                     : root.landscape.indexOf(parent.page) >= 0 && backend.options.autoRotate ? qsTr("turns to fit")
                     : ""
             }

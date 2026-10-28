@@ -1,5 +1,5 @@
 pkgname=pritingo
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Print on Canon PIXMA E400-series printers one page per job, with guided two-sided printing'
 arch=('x86_64' 'aarch64')
