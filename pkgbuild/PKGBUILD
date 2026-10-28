@@ -1,7 +1,7 @@
-pkgname=baski
+pkgname=pritingo
 pkgver=0.1.0
 pkgrel=1
-pkgdesc='Print anything on a Canon E410, one page per job, with guided two-sided printing'
+pkgdesc='Print on Canon PIXMA E400-series printers one page per job, with guided two-sided printing'
 arch=('x86_64' 'aarch64')
 license=('MIT')
 depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'xdg-desktop-portal' 'cups' 'poppler' 'qpdf'
@@ -20,8 +20,8 @@ build() {
 
 package() {
   cd "$startdir/.."
-  install -Dm755 build/baski "$pkgdir/usr/bin/baski"
+  install -Dm755 build/pritingo "$pkgdir/usr/bin/pritingo"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-  install -Dm644 "$startdir/baski.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/baski.svg"
-  install -Dm644 "$startdir/baski.desktop" "$pkgdir/usr/share/applications/baski.desktop"
+  install -Dm644 "$startdir/pritingo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/pritingo.svg"
+  install -Dm644 "$startdir/pritingo.desktop" "$pkgdir/usr/share/applications/pritingo.desktop"
 }

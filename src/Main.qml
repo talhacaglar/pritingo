@@ -10,7 +10,7 @@ ApplicationWindow {
     minimumWidth: 860
     minimumHeight: 560
     visible: true
-    title: backend.fileName ? backend.fileName + " — Baskı" : "Baskı"
+    title: backend.fileName ? backend.fileName + " — Pritingo" : "Pritingo"
     color: "#0e0e10"
 
     Material.theme: Material.Dark

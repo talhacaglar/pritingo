@@ -40,7 +40,7 @@ Rectangle {
             spacing: 0
             Layout.fillWidth: true
             Label {
-                text: backend.fileName || "Baskı"
+                text: backend.fileName || "Pritingo"
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
                 elide: Text.ElideMiddle

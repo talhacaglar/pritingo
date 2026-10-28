@@ -13,7 +13,7 @@ Translator::Translator(const QString &languageFile, const QString &catalogDirect
                        const QString &overrideFile)
     : QTranslator(parent),
       m_languageFile(languageFile.isEmpty() ? QDir::homePath() + "/.config/omarchy/language" : languageFile),
-      m_overrideFile(overrideFile.isEmpty() && languageFile.isEmpty() ? QDir::homePath() + "/.config/baski/language"
+      m_overrideFile(overrideFile.isEmpty() && languageFile.isEmpty() ? QDir::homePath() + "/.config/pritingo/language"
                                                                       : overrideFile),
       m_catalogDirectory(catalogDirectory) {
     m_debounce.setSingleShot(true);

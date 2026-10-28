@@ -1,4 +1,4 @@
-// baski — prints any document on a Canon E410, one page per job, with a
+// pritingo — prints any document on a Canon E410, one page per job, with a
 // guided two-sided mode for a printer that has no duplexer.
 
 #include <QGuiApplication>
@@ -15,14 +15,14 @@
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
-    app.setApplicationName("baski");
-    app.setApplicationDisplayName("Baskı");
+    app.setApplicationName("pritingo");
+    app.setApplicationDisplayName("Pritingo");
     app.setApplicationVersion("0.1.0");
 
-    // Matches the window to baski.desktop, so the compositor (Wayland app_id)
+    // Matches the window to pritingo.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon.
-    app.setDesktopFileName("baski");
-    app.setWindowIcon(QIcon::fromTheme("baski"));
+    app.setDesktopFileName("pritingo");
+    app.setWindowIcon(QIcon::fromTheme("pritingo"));
 
     QQuickStyle::setStyle("Material");
 

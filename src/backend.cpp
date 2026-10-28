@@ -24,7 +24,7 @@ constexpr int SecondsPerPage = 30;
 // light on the printer, which the driver cannot report back.
 constexpr int StallSeconds = 75;
 
-const QStringList ImageSuffixes{"jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic"};
+const QStringList ImageSuffixes{"jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff"};
 
 const QVariantMap Defaults{
     {"duplex", false},     {"color", false},      {"quality", 3},       {"media", "plain"},
@@ -61,7 +61,7 @@ bool usbPrinterPresent() {
 } // namespace
 
 Backend::Backend(FilePicker *picker, QObject *parent)
-    : QObject(parent), m_picker(picker), m_settings("baski", "baski") {
+    : QObject(parent), m_picker(picker), m_settings("pritingo", "pritingo") {
     if (!m_picker) {
         m_ownedPicker = std::make_unique<PortalFilePicker>();
         m_picker = m_ownedPicker.get();
@@ -239,7 +239,7 @@ void Backend::openFile(const QString &pathOrUrl) {
     }
 
     const int generation = ++m_loadGeneration;
-    m_work = std::make_unique<QTemporaryDir>(QDir::tempPath() + "/baski-XXXXXX");
+    m_work = std::make_unique<QTemporaryDir>(QDir::tempPath() + "/pritingo-XXXXXX");
     m_fileName = info.fileName();
     m_pageSizes.clear();
     m_pageRotations.clear();
@@ -600,7 +600,7 @@ void Backend::sendItem() {
                 env.insert("DEVICE_URI", m_deviceUri.isEmpty() ? "usb://" : m_deviceUri);
                 setStep(tr("Rendering page %1").arg(page));
                 run("/usr/lib/cups/filter/pstocanonij",
-                    {"1", qEnvironmentVariable("USER"), "baski", "1", Planner::driverOptions(m_options), ps},
+                    {"1", qEnvironmentVariable("USER"), "pritingo", "1", Planner::driverOptions(m_options), ps},
                     [=, this](int code, const QString &) {
                         if (!alive())
                             return;
@@ -625,7 +625,7 @@ void Backend::sendItem() {
                             m_jobPoll.start();
                         });
                         lp->start("lp", {"-d", m_printer, "-o", "raw", "-t",
-                                         QStringLiteral("baski %1 p%2").arg(m_fileName).arg(page), bin});
+                                         QStringLiteral("pritingo %1 p%2").arg(m_fileName).arg(page), bin});
                     },
                     bin, env);
             });
@@ -756,7 +756,7 @@ void Backend::fail(const QString &message) {
 }
 
 void Backend::notify(const QString &title, const QString &body, const QString &sound) {
-    QProcess::startDetached("notify-send", {"-a", "Baskı", "-i", "baski", title, body});
+    QProcess::startDetached("notify-send", {"-a", "Pritingo", "-i", "pritingo", title, body});
     if (m_options.value("sounds").toBool())
         QProcess::startDetached("canberra-gtk-play", {"-i", sound});
 }
@@ -811,7 +811,7 @@ void Backend::testDuplexOrientation() {
     // show whether the backs need flipping or reversing on this printer.
     // A private, randomly named directory (mode 0700) rather than a fixed
     // path in /tmp; it lives until openFile has copied the result.
-    auto temporary = std::make_shared<QTemporaryDir>(QDir::tempPath() + "/baski-test-XXXXXX");
+    auto temporary = std::make_shared<QTemporaryDir>(QDir::tempPath() + "/pritingo-test-XXXXXX");
     if (!temporary->isValid())
         return setProblem(tr("Could not make the test page: %1").arg(temporary->errorString()));
     const QString dir = temporary->path();

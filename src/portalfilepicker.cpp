@@ -57,7 +57,7 @@ void PortalFilePicker::open(const QString &title, const QStringList &patterns) {
     auto bus = QDBusConnection::sessionBus();
     // Subscribing before the call avoids missing a fast answer; the request
     // path is predictable from our unique name and the handle token.
-    const QString token = QStringLiteral("baski%1").arg(QRandomGenerator::global()->generate());
+    const QString token = QStringLiteral("pritingo%1").arg(QRandomGenerator::global()->generate());
     QString sender = bus.baseService().mid(1).replace('.', '_');
     m_request = QStringLiteral("/org/freedesktop/portal/desktop/request/%1/%2").arg(sender, token);
     bus.connect("org.freedesktop.portal.Desktop", m_request, "org.freedesktop.portal.Request", "Response",

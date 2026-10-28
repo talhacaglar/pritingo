@@ -19,7 +19,7 @@ public:
     void open(const QString &, const QStringList &) override { emit picked(answer); }
 };
 
-class BaskiTests : public QObject {
+class PritingoTests : public QObject {
     Q_OBJECT
 
 private slots:
@@ -252,5 +252,5 @@ private:
     }
 };
 
-QTEST_MAIN(BaskiTests)
-#include "baski_tests.moc"
+QTEST_MAIN(PritingoTests)
+#include "pritingo_tests.moc"
