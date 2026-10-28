@@ -809,8 +809,12 @@ void Backend::testDuplexOrientation() {
         return;
     // A two-page sheet with big arrows: print it two-sided once and the arrows
     // show whether the backs need flipping or reversing on this printer.
-    const QString dir = QDir::tempPath() + "/baski-test";
-    QDir().mkpath(dir);
+    // A private, randomly named directory (mode 0700) rather than a fixed
+    // path in /tmp; it lives until openFile has copied the result.
+    auto temporary = std::make_shared<QTemporaryDir>(QDir::tempPath() + "/baski-test-XXXXXX");
+    if (!temporary->isValid())
+        return setProblem(tr("Could not make the test page: %1").arg(temporary->errorString()));
+    const QString dir = temporary->path();
     const QString pdf = dir + "/" + tr("two-sided-test") + ".pdf";
     auto page = [&](const QString &text, const QString &out) {
         return QStringList{"-size", "1240x1754", "xc:white", "-gravity", "north", "-pointsize", "110", "-fill",
@@ -826,6 +830,7 @@ void Backend::testDuplexOrientation() {
                 return setProblem(tr("Could not make the test page: %1").arg(error));
             run("qpdf", {"--empty", "--pages", dir + "/1.pdf", dir + "/2.pdf", "--", pdf},
                 [=, this](int code, const QString &error) {
+                    Q_UNUSED(temporary);
                     if (code != 0)
                         return setProblem(tr("Could not make the test page: %1").arg(error));
                     setOption("duplex", true);
