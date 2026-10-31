@@ -11,13 +11,15 @@ Rectangle {
 
     readonly property var keys: [
         ["O", qsTr("Open a file")],
-        ["Space", qsTr("Print, or continue with the backs")],
+        ["Space", qsTr("Print, continue with the backs, or scan")],
         ["D", qsTr("One-sided / two-sided")],
         ["C", qsTr("Black & white / color")],
         ["V", qsTr("Pages / sheets view")],
         ["A", qsTr("Select every page")],
         ["+  −", qsTr("More / fewer copies")],
         ["W", qsTr("Close the file")],
+        ["S", qsTr("Scan from the glass")],
+        ["Ctrl+S", qsTr("Save the scans as PDF")],
         ["Esc", qsTr("Stop printing, close a panel")],
         ["?", qsTr("Show these shortcuts")],
         ["Q", qsTr("Quit")]
@@ -52,7 +54,7 @@ Rectangle {
                 model: root.keys.length * 2
                 delegate: Item {
                     readonly property var entry: root.keys[Math.floor(index / 2)]
-                    implicitWidth: index % 2 ? desc.implicitWidth : 70
+                    implicitWidth: index % 2 ? desc.implicitWidth : 80
                     implicitHeight: 28
                     Layout.fillWidth: index % 2 === 1
                     Rectangle {

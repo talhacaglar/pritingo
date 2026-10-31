@@ -13,10 +13,14 @@ class PortalFilePicker : public FilePicker {
 public:
     using FilePicker::FilePicker;
     void open(const QString &title, const QStringList &patterns) override;
+    void save(const QString &title, const QString &suggestedName) override;
 
 private slots:
     void response(uint code, const QVariantMap &results);
 
 private:
+    void request(const QString &method, const QString &title, QVariantMap options);
+
     QString m_request;
+    bool m_saving = false;
 };

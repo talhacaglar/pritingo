@@ -22,12 +22,14 @@ ApplicationWindow {
     readonly property color muted: "#8b8b95"
     readonly property bool busy: backend.state === "printing" || backend.state === "flip"
     property bool helpVisible: false
+    property bool scanOpen: false
     property int previewPage: 0
     property string view: backend.options.duplex ? "sheets" : "pages"
 
     function primary() {
         if (helpVisible) { helpVisible = false; return }
         if (previewPage) { previewPage = 0; return }
+        if (scanOpen && !busy) { if (!scanner.busy) scanner.scan(); return }
         if (backend.state === "flip") backend.continueAfterFlip()
         else if (backend.state === "done" || backend.state === "error") backend.dismiss()
         else if (backend.state === "idle" && backend.pageCount > 0) backend.print()
@@ -37,26 +39,34 @@ ApplicationWindow {
         if (helpVisible) helpVisible = false
         else if (previewPage) previewPage = 0
         else if (busy) cancelDialog.open()
+        else if (scanOpen && scanner.busy) scanner.cancel()
+        else if (scanOpen) scanOpen = false
         else if (backend.state !== "idle") backend.dismiss()
     }
 
     // Typing in the range field must not trigger single-key shortcuts.
     readonly property bool typing: activeFocusItem instanceof TextInput
+    // The document's single-key shortcuts rest while the scan view is up.
+    readonly property bool documentKeys: !typing && !scanOpen
 
     Shortcut { sequence: "?"; enabled: !win.typing; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
     Shortcut { sequence: "F1"; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
     Shortcut { sequence: "Q"; enabled: !win.typing; context: Qt.ApplicationShortcut; onActivated: win.busy ? quitDialog.open() : Qt.quit() }
     Shortcut { sequence: "Space"; enabled: !win.typing; context: Qt.ApplicationShortcut; onActivated: win.primary() }
-    Shortcut { sequences: ["Ctrl+P", "Return"]; enabled: !win.typing || backend.state === "idle"; context: Qt.ApplicationShortcut; onActivated: win.primary() }
+    Shortcut { sequence: "Return"; enabled: !win.typing || backend.state === "idle"; context: Qt.ApplicationShortcut; onActivated: win.primary() }
+    Shortcut { sequence: "Ctrl+P"; context: Qt.ApplicationShortcut; onActivated: win.scanOpen && !win.busy ? scanner.print() : win.primary() }
     Shortcut { sequence: "Escape"; context: Qt.ApplicationShortcut; onActivated: win.dismissTop() }
-    Shortcut { sequences: ["O", "Ctrl+O"]; enabled: !win.typing && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.pickFile() }
-    Shortcut { sequence: "D"; enabled: !win.typing && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("duplex", !backend.options.duplex) }
-    Shortcut { sequence: "C"; enabled: !win.typing && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("color", !backend.options.color) }
-    Shortcut { sequence: "V"; enabled: !win.typing; context: Qt.ApplicationShortcut; onActivated: win.view = win.view === "pages" ? "sheets" : "pages" }
-    Shortcut { sequence: "+"; enabled: !win.typing && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("copies", Math.min(99, backend.options.copies + 1)) }
-    Shortcut { sequence: "-"; enabled: !win.typing && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("copies", Math.max(1, backend.options.copies - 1)) }
-    Shortcut { sequence: "A"; enabled: !win.typing && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.selectPages("all") }
-    Shortcut { sequence: "W"; enabled: !win.typing && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.closeFile() }
+    Shortcut { sequences: ["O", "Ctrl+O"]; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.pickFile() }
+    Shortcut { sequence: "D"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("duplex", !backend.options.duplex) }
+    Shortcut { sequence: "C"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("color", !backend.options.color) }
+    Shortcut { sequence: "V"; enabled: win.documentKeys; context: Qt.ApplicationShortcut; onActivated: win.view = win.view === "pages" ? "sheets" : "pages" }
+    Shortcut { sequence: "+"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("copies", Math.min(99, backend.options.copies + 1)) }
+    Shortcut { sequence: "-"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("copies", Math.max(1, backend.options.copies - 1)) }
+    Shortcut { sequence: "A"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.selectPages("all") }
+    Shortcut { sequence: "S"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: win.scanOpen = true }
+    Shortcut { sequence: "Ctrl+S"; enabled: win.scanOpen; context: Qt.ApplicationShortcut; onActivated: scanner.save() }
+    Shortcut { sequence: "C"; enabled: win.scanOpen && !win.typing && !scanner.busy; context: Qt.ApplicationShortcut; onActivated: scanner.setOption("color", !scanner.options.color) }
+    Shortcut { sequence: "W"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.closeFile() }
 
     Item {
         anchors.fill: parent
@@ -131,6 +141,7 @@ ApplicationWindow {
             }
         }
 
+        ScanView { objectName: "scanView"; anchors.fill: parent; visible: win.scanOpen; onClosed: win.scanOpen = false }
         PrintingOverlay { objectName: "printingOverlay"; anchors.fill: parent; visible: backend.state === "printing" }
         FlipOverlay { objectName: "flipOverlay"; anchors.fill: parent; visible: backend.state === "flip" }
         FinishedOverlay { objectName: "finishedOverlay"; anchors.fill: parent; visible: backend.state === "done" || backend.state === "error" }
@@ -143,7 +154,8 @@ ApplicationWindow {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 20
-            visible: backend.problem !== ""
+            readonly property string message: backend.problem || scanner.problem
+            visible: message !== ""
             width: Math.min(parent.width - 80, problemText.implicitWidth + 48)
             height: problemText.implicitHeight + 24
             radius: theme.radius
@@ -154,7 +166,7 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 width: Math.min(implicitWidth, parent.parent.width - 128)
                 wrapMode: Text.WordWrap
-                text: "⚠  " + backend.problem
+                text: "⚠  " + problemBar.message
                 color: "#ffd7d7"
             }
         }
@@ -180,6 +192,12 @@ ApplicationWindow {
             Connections {
                 target: backend
                 function onToast(message) { toastText.text = message; toastAnimation.restart() }
+            }
+            Connections {
+                target: scanner
+                function onToast(message) { toastText.text = message; toastAnimation.restart() }
+                // A copy opens like any document, ready for the print settings.
+                function onReadyToPrint() { win.scanOpen = false }
             }
         }
     }

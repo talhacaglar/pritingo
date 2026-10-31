@@ -30,5 +30,9 @@
   "%n page(s) of “%1” are ready.": {
     "one": "%n page of “%1” is ready.",
     "other": "%n pages of “%1” are ready."
+  },
+  "%n card(s)": {
+    "one": "%n card",
+    "other": "%n cards"
   }
 }

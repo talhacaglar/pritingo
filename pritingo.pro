@@ -9,6 +9,7 @@ HEADERS += \
     src/filepicker.h \
     src/planner.h \
     src/portalfilepicker.h \
+    src/scanner.h \
     src/theme.h \
     src/translator.h
 
@@ -17,6 +18,7 @@ SOURCES += \
     src/backend.cpp \
     src/planner.cpp \
     src/portalfilepicker.cpp \
+    src/scanner.cpp \
     src/theme.cpp \
     src/translator.cpp
 

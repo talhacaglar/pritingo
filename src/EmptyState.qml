@@ -65,6 +65,13 @@ Item {
                 text: qsTr("Choose a file  (O)")
                 onClicked: backend.pickFile()
             }
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                flat: true
+                enabled: !backend.loading
+                text: qsTr("Scan from the glass  (S)")
+                onClicked: win.scanOpen = true
+            }
             BusyIndicator {
                 Layout.alignment: Qt.AlignHCenter
                 visible: backend.loading

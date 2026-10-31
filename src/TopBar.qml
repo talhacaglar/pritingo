@@ -105,6 +105,7 @@ Rectangle {
                 y: parent.height
                 MenuItem { text: qsTr("Open a file…"); enabled: !win.busy; onTriggered: backend.pickFile() }
                 MenuItem { text: qsTr("Close the file"); enabled: !win.busy && backend.pageCount > 0; onTriggered: backend.closeFile() }
+                MenuItem { text: qsTr("Scan…"); enabled: !win.busy && !win.scanOpen; onTriggered: win.scanOpen = true }
                 MenuSeparator {}
                 MenuItem { text: qsTr("Two-sided test sheet"); enabled: !win.busy; onTriggered: backend.testDuplexOrientation() }
                 Menu {

@@ -1,5 +1,6 @@
 // pritingo — prints any document on a Canon E410, one page per job, with a
-// guided two-sided mode for a printer that has no duplexer.
+// guided two-sided mode for a printer that has no duplexer, and scans from
+// its glass to a PDF or straight to a copy.
 
 #include <QGuiApplication>
 #include <QIcon>
@@ -10,6 +11,7 @@
 #include <QUrl>
 
 #include "backend.h"
+#include "scanner.h"
 #include "theme.h"
 #include "translator.h"
 
@@ -33,12 +35,17 @@ int main(int argc, char *argv[]) {
 
     Theme theme;
     Backend backend;
+    Scanner scanner;
+    // A copy is a scan printed like any other document, with every print
+    // setting still available.
+    QObject::connect(&scanner, &Scanner::readyToPrint, &backend, &Backend::openFile);
 
     QQmlApplicationEngine engine;
     QObject::connect(&translator, &Translator::changed, &engine, &QQmlEngine::retranslate);
     engine.rootContext()->setContextProperty("translator", &translator);
     engine.rootContext()->setContextProperty("theme", &theme);
     engine.rootContext()->setContextProperty("backend", &backend);
+    engine.rootContext()->setContextProperty("scanner", &scanner);
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;

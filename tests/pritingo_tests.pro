@@ -7,6 +7,6 @@ TEMPLATE = app
 INCLUDEPATH += ../src
 
 HEADERS += ../src/backend.h ../src/filepicker.h ../src/planner.h ../src/portalfilepicker.h \
-    ../src/theme.h ../src/translator.h
+    ../src/scanner.h ../src/theme.h ../src/translator.h
 SOURCES += pritingo_tests.cpp ../src/backend.cpp ../src/planner.cpp ../src/portalfilepicker.cpp \
-    ../src/theme.cpp ../src/translator.cpp
+    ../src/scanner.cpp ../src/theme.cpp ../src/translator.cpp

@@ -9,14 +9,16 @@
 #include "backend.h"
 #include "filepicker.h"
 #include "planner.h"
+#include "scanner.h"
 #include "theme.h"
 #include "translator.h"
 
-// Answers immediately, so opening files needs no desktop portal.
+// Answers immediately, so opening and saving files needs no desktop portal.
 class FakePicker : public FilePicker {
 public:
     QString answer;
     void open(const QString &, const QStringList &) override { emit picked(answer); }
+    void save(const QString &, const QString &) override { emit savePicked(answer); }
 };
 
 class PritingoTests : public QObject {
@@ -157,6 +159,116 @@ private slots:
         backend.setOption("quality", 3);
     }
 
+    void scannerCutsOutAnUprightCard()
+    {
+        if (QStandardPaths::findExecutable("magick").isEmpty())
+            QSKIP("ImageMagick missing");
+        QTemporaryDir dir;
+        const QString glass = dir.filePath("glass.png");
+        makeGlass(glass);
+
+        Scanner scanner;
+        scanner.setOption("layout", "card");
+        scanner.addScan(glass, 300);
+        QTRY_COMPARE_WITH_TIMEOUT(scanner.pages().size(), 1, 20000);
+        QTRY_VERIFY_WITH_TIMEOUT(!scanner.pages().first().toMap().value("thumbnail").toString().isEmpty(), 20000);
+        QVERIFY(!scanner.busy());
+
+        // The card is 1011 × 638 at 300 dpi, upright on the glass, and comes
+        // out lying down with at most a few pixels of shadow.
+        const QString page = QUrl(scanner.pages().first().toMap().value("thumbnail").toString()).toLocalFile();
+        const QSize size = imageSize(QFileInfo(page).dir().filePath("page-" + QFileInfo(page).fileName().section('-', 1, 1) + ".png"));
+        QVERIFY2(size.width() >= 1005 && size.width() <= 1030, qPrintable(QString::number(size.width())));
+        QVERIFY2(size.height() >= 632 && size.height() <= 655, qPrintable(QString::number(size.height())));
+
+        scanner.addScan(glass, 300);
+        QTRY_COMPARE_WITH_TIMEOUT(scanner.pages().size(), 2, 20000);
+        const QString pdf = dir.filePath("card.pdf");
+        QString error = "pending";
+        scanner.writePdf(pdf, [&](const QString &e) { error = e; });
+        QTRY_COMPARE_WITH_TIMEOUT(error, QString(), 20000);
+        // Both sides of the card share one A4 page.
+        QCOMPARE(pdfPages(pdf), (QStringList{"595.2 x 841.92"}));
+        scanner.setOption("layout", "document");
+    }
+
+    void scannerKeepsDocumentPagesA4()
+    {
+        if (QStandardPaths::findExecutable("magick").isEmpty() || QStandardPaths::findExecutable("pdfinfo").isEmpty())
+            QSKIP("ImageMagick or poppler missing");
+        QTemporaryDir dir;
+        const QString low = dir.filePath("low.png"), high = dir.filePath("high.png");
+        QVERIFY(magick({"-size", "1240x1754", "xc:white", low}));
+        QVERIFY(magick({"-size", "2480x3508", "xc:white", high}));
+
+        FakePicker picker;
+        picker.answer = dir.filePath("saved"); // no suffix: the scanner adds .pdf
+        Scanner scanner(&picker);
+        scanner.addScan(low, 150);
+        scanner.addScan(high, 300);
+        QTRY_COMPARE_WITH_TIMEOUT(scanner.pages().size(), 2, 20000);
+        scanner.rotatePage(1);
+        scanner.removePage(5);
+        QTRY_VERIFY_WITH_TIMEOUT(!scanner.busy(), 20000);
+
+        scanner.save();
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(dir.filePath("saved.pdf")), 20000);
+        QVERIFY(!QFileInfo::exists(dir.filePath("saved.pdf.part")));
+        // Different resolutions still come out A4; the turned page lies down.
+        QCOMPARE(pdfPages(dir.filePath("saved.pdf")), (QStringList{"595.2 x 841.92", "841.92 x 595.2"}));
+
+        QSignalSpy ready(&scanner, &Scanner::readyToPrint);
+        scanner.print();
+        QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 20000);
+        QVERIFY(QFileInfo::exists(ready.first().first().toString()));
+
+        scanner.removePage(0);
+        QCOMPARE(scanner.pages().size(), 1);
+        scanner.clear();
+        QCOMPARE(scanner.pages().size(), 0);
+    }
+
+    void scannerFindsTheDeviceAndScans()
+    {
+        if (QStandardPaths::findExecutable("magick").isEmpty())
+            QSKIP("ImageMagick missing");
+        // A stand-in scanimage: lists a webcam before the Canon, and a scan
+        // copies a prepared page to the -o path while reporting progress.
+        QTemporaryDir dir;
+        const QString page = dir.filePath("page.png");
+        QVERIFY(magick({"-size", "1240x1754", "xc:white", page}));
+        write(dir.filePath("args"), "");
+        write(dir.filePath("scanimage"),
+              "#!/bin/sh\n"
+              "if [ \"$1\" = -L ]; then\n"
+              "  echo \"device \\`v4l:/dev/video0' is a Noname USB2.0 Camera virtual device\"\n"
+              "  echo \"device \\`pixma:04A9181E_X' is a CANON Canon PIXMA E410 Series multi-function peripheral\"\n"
+              "  exit 0\nfi\n"
+              "echo \"$@\" > '" + dir.filePath("args").toUtf8() + "'\n"
+              "while [ $# -gt 0 ]; do [ \"$1\" = -o ] && out=$2; shift; done\n"
+              "printf 'Progress: 40.0%%\\rProgress: 100.0%%\\r' >&2\n"
+              "cp '" + page.toUtf8() + "' \"$out\"\n");
+        QVERIFY(QFile::setPermissions(dir.filePath("scanimage"), QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+        const QByteArray path = qgetenv("PATH");
+        qputenv("PATH", dir.path().toUtf8() + ":" + path);
+
+        Scanner scanner;
+        scanner.setOption("resolution", 150);
+        scanner.scan();
+        QTRY_COMPARE_WITH_TIMEOUT(scanner.pages().size(), 1, 20000);
+        qputenv("PATH", path);
+
+        QCOMPARE(scanner.device(), QString("pixma:04A9181E_X"));
+        QCOMPARE(scanner.deviceName(), QString("Canon PIXMA E410 Series"));
+        QFile args(dir.filePath("args"));
+        QVERIFY(args.open(QIODevice::ReadOnly));
+        const QString used = QString::fromUtf8(args.readAll());
+        QVERIFY2(used.contains("-d pixma:04A9181E_X --mode Gray --resolution 150"), qPrintable(used));
+        QVERIFY(used.contains("-x 210 -y 297"));
+        QVERIFY(scanner.problem().isEmpty());
+        scanner.setOption("resolution", 300);
+    }
+
     void themeFallsBack()
     {
         QTemporaryDir dir;
@@ -249,6 +361,46 @@ private:
         QFile file(path);
         QVERIFY(file.open(QIODevice::WriteOnly));
         file.write(contents);
+    }
+
+    static bool magick(const QStringList &arguments)
+    {
+        QProcess process;
+        process.start("magick", arguments);
+        return process.waitForFinished(30000) && process.exitCode() == 0;
+    }
+
+    static QSize imageSize(const QString &path)
+    {
+        QProcess process;
+        process.start("magick", {"identify", "-format", "%w %h", path});
+        process.waitForFinished(20000);
+        const QStringList parts = QString::fromUtf8(process.readAllStandardOutput()).split(' ');
+        return parts.size() == 2 ? QSize(parts[0].toInt(), parts[1].toInt()) : QSize();
+    }
+
+    static QStringList pdfPages(const QString &pdf)
+    {
+        QProcess process;
+        process.start("pdfinfo", {"-f", "1", "-l", "99", pdf});
+        process.waitForFinished(20000);
+        QStringList sizes;
+        static const QRegularExpression size(R"(Page\s+\d+\s+size:\s+([\d.]+ x [\d.]+))");
+        for (auto it = size.globalMatch(QString::fromUtf8(process.readAllStandardOutput())); it.hasNext();)
+            sizes << it.next().captured(1);
+        return sizes;
+    }
+
+    // An A4 glass at 300 dpi like the E410's: a near-white lid, the lid's
+    // dark shadow along two edges, and an ID card standing upright in the
+    // middle with a photo, text and a very light patch on it.
+    static void makeGlass(const QString &path)
+    {
+        QVERIFY(magick({"-size", "2480x3508", "xc:gray(92%)", "-fill", "gray(18%)", "-draw", "rectangle 0,0 2479,12",
+                        "-draw", "rectangle 0,0 10,3507", "-fill", "#9fb4c8", "-draw", "roundrectangle 961,610 1598,1620 30,30",
+                        "-fill", "#f2f2f2", "-draw", "rectangle 1010,700 1540,900", "-fill", "#3a3a3a", "-draw",
+                        "rectangle 1100,1050 1450,1400", "-fill", "#222", "-draw", "rectangle 1000,1450 1550,1470",
+                        path}));
     }
 };
 

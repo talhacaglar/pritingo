@@ -12,6 +12,7 @@
         <file alias="FinishedOverlay.qml">FinishedOverlay.qml</file>
         <file alias="PagePreview.qml">PagePreview.qml</file>
         <file alias="HelpOverlay.qml">HelpOverlay.qml</file>
+        <file alias="ScanView.qml">ScanView.qml</file>
         <file alias="i18n/en.json">i18n/en.json</file>
         <file alias="i18n/tr.json">i18n/tr.json</file>
     </qresource>

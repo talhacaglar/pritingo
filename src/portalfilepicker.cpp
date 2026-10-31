@@ -49,6 +49,27 @@ const QDBusArgument &operator>>(const QDBusArgument &argument, PortalFilter &fil
 }
 
 void PortalFilePicker::open(const QString &title, const QStringList &patterns) {
+    PortalFilter documents;
+    documents.name = tr("Printable files");
+    for (const auto &pattern : patterns)
+        documents.rules << PortalFilterRule{0, pattern};
+    PortalFilter everything{tr("All files"), {PortalFilterRule{0, "*"}}};
+
+    QVariantMap options;
+    options["filters"] = QVariant::fromValue(QList<PortalFilter>{documents, everything});
+    m_saving = false;
+    request("OpenFile", title, options);
+}
+
+void PortalFilePicker::save(const QString &title, const QString &suggestedName) {
+    QVariantMap options;
+    options["current_name"] = suggestedName;
+    options["filters"] = QVariant::fromValue(QList<PortalFilter>{{tr("PDF documents"), {PortalFilterRule{0, "*.pdf"}}}});
+    m_saving = true;
+    request("SaveFile", title, options);
+}
+
+void PortalFilePicker::request(const QString &method, const QString &title, QVariantMap options) {
     qDBusRegisterMetaType<PortalFilterRule>();
     qDBusRegisterMetaType<QList<PortalFilterRule>>();
     qDBusRegisterMetaType<PortalFilter>();
@@ -63,19 +84,11 @@ void PortalFilePicker::open(const QString &title, const QStringList &patterns) {
     bus.connect("org.freedesktop.portal.Desktop", m_request, "org.freedesktop.portal.Request", "Response",
                 this, SLOT(response(uint, QVariantMap)));
 
-    PortalFilter documents;
-    documents.name = tr("Printable files");
-    for (const auto &pattern : patterns)
-        documents.rules << PortalFilterRule{0, pattern};
-    PortalFilter everything{tr("All files"), {PortalFilterRule{0, "*"}}};
-
-    QVariantMap options;
     options["handle_token"] = token;
     options["modal"] = true;
-    options["filters"] = QVariant::fromValue(QList<PortalFilter>{documents, everything});
 
     auto call = QDBusMessage::createMethodCall("org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop",
-                                               "org.freedesktop.portal.FileChooser", "OpenFile");
+                                               "org.freedesktop.portal.FileChooser", method);
     call << QString() << title << options;
     const QDBusReply<QDBusObjectPath> reply = bus.call(call);
     if (!reply.isValid()) {
@@ -101,6 +114,11 @@ void PortalFilePicker::response(uint code, const QVariantMap &results) {
     if (code != 0)
         return; // cancelled
     const QStringList uris = results.value("uris").toStringList();
-    if (!uris.isEmpty())
-        emit picked(QUrl(uris.first()).toLocalFile());
+    if (uris.isEmpty())
+        return;
+    const QString path = QUrl(uris.first()).toLocalFile();
+    if (m_saving)
+        emit savePicked(path);
+    else
+        emit picked(path);
 }
