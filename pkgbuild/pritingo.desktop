@@ -2,12 +2,12 @@
 Type=Application
 Name=Pritingo
 Name[tr]=Pritingo
-Comment=Print documents and pictures, one-sided or two-sided
-Comment[tr]=Belge ve resimleri tek yüz ya da arkalı önlü yazdır
+Comment=Print documents and pictures, one-sided or two-sided, and scan to PDF
+Comment[tr]=Belge ve resimleri tek yüz ya da arkalı önlü yazdır, PDF olarak tara
 Exec=pritingo %f
 Icon=pritingo
 Terminal=false
 Categories=Utility;Office;
-Keywords=print;printer;duplex;two-sided;yazdır;yazıcı;arkalı;önlü;
+Keywords=print;printer;duplex;two-sided;scan;scanner;copy;id card;yazdır;yazıcı;arkalı;önlü;tara;tarayıcı;kimlik;fotokopi;
 MimeType=application/pdf;image/jpeg;image/png;image/webp;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;
 StartupWMClass=pritingo

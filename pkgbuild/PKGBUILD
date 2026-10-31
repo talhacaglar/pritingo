@@ -1,14 +1,15 @@
 pkgname=pritingo
-pkgver=0.1.1
+pkgver=0.2.0
 pkgrel=1
-pkgdesc='Print on Canon PIXMA E400-series printers one page per job, with guided two-sided printing'
+pkgdesc='Print on Canon PIXMA E400-series printers one page per job, with guided two-sided printing, and scan to PDF'
 arch=('x86_64' 'aarch64')
 license=('MIT')
 depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'xdg-desktop-portal' 'cups' 'poppler' 'qpdf'
          'imagemagick' 'libnotify')
 optdepends=('cnijfilter-e400series: the Canon driver that renders the pages (AUR)'
             'libreoffice-fresh: open Word, Excel, PowerPoint and LibreOffice files'
-            'libcanberra: sounds when the fronts or the whole job are done')
+            'libcanberra: sounds when the fronts or the whole job are done'
+            'sane: scan from the printer'\''s glass to a PDF or a copy')
 makedepends=('gcc' 'make')
 source=()
 sha256sums=()

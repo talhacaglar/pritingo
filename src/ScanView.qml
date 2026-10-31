@@ -346,16 +346,21 @@ Rectangle {
                                    : root.backNext ? qsTr("Scan the back") : qsTr("Scan the front")) + "    ␣"
                             onClicked: scanner.busy ? scanner.cancel() : scanner.scan()
                         }
-                        RowLayout {
+                        // Side by side when both fit, stacked in a narrow tile.
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: 8
+                            columnSpacing: 8
+                            rowSpacing: 0
+                            columns: saveButton.implicitWidth + printCopyButton.implicitWidth + 8 <= width ? 2 : 1
                             Button {
+                                id: saveButton
                                 Layout.fillWidth: true
                                 enabled: root.count > 0 && !scanner.busy
                                 text: qsTr("Save as PDF")
                                 onClicked: scanner.save()
                             }
                             Button {
+                                id: printCopyButton
                                 Layout.fillWidth: true
                                 enabled: root.count > 0 && !scanner.busy && !win.busy
                                 text: qsTr("Print a copy")

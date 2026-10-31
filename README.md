@@ -24,11 +24,17 @@ put back this many sheets, this one first, keep this one out because its
 back stays blank), raises a desktop notification with a sound, and prints
 the backs when you press Space.
 
+It also **scans** from the printer's glass, to a PDF or straight to a printed
+copy, with an **ID card** layout that cuts the card out of the scan and puts
+its front and back on one A4 page at their real size, like a photocopy.
+
 > 🇹🇷 **Türkçe:** Pritingo, Canon PIXMA E400 serisi yazıcılarla Linux'ta
 > tek yüz ya da arkalı önlü, renkli ya da siyah-beyaz baskı yapan bir masaüstü
 > uygulamasıdır. Yazıcının çok sayfalı işlerde sayfa düşürme sorununu her
 > sayfayı ayrı iş olarak göndererek çözer; arkalı önlü baskıda kağıtları nasıl
-> çevireceğini adım adım gösterir. Arayüz Türkçe ve İngilizce'dir.
+> çevireceğini adım adım gösterir. Camdan PDF'e ya da doğrudan kopyaya tarar;
+> kimlik kartı düzeni kartın iki yüzünü gerçek boyutunda tek A4 sayfaya
+> yerleştirir. Arayüz Türkçe ve İngilizce'dir.
 
 ## Supported printers
 
@@ -45,6 +51,10 @@ for more printers means teaching it which filter and PPD to use, which is a
 small, well-contained change in `src/backend.cpp` (`driverPpd()` and the
 filter call in `sendItem()`). If you have another printer, pull requests are
 very welcome. See [Contributing](#contributing).
+
+Scanning goes through SANE (`scanimage`), not the Canon driver, so it works
+with any scanner SANE knows. On the E410 the `pixma` backend found and scanned
+over USB in testing. Webcams that SANE lists are skipped.
 
 Connection: tested over **USB**. A network-connected E400-series printer
 should work as long as it has a CUPS queue, but this is untested.
@@ -71,6 +81,13 @@ should work as long as it has a CUPS queue, but this is untested.
 - **Second-pass controls**: print the backs in reverse order, or upside down,
   for however your printer stacks and feeds paper. A **two-sided test sheet**
   with arrows helps you find the right combination once.
+- **Scanning** (`S`): black and white or color, 150, 300 or 600 dpi. Each
+  scan shows as a page you can turn or remove. **Save as PDF** asks where
+  through the desktop's own dialog; **Print a copy** opens the scans like any
+  document, so copies, two-sided and every print setting still apply.
+- **ID card copies**: lay the card anywhere on the glass, scan the front, turn
+  it over when the app says so, scan the back. The card is found and cut out
+  of each scan, and both sides land on one A4 page at their real size.
 - **Printer maintenance**: nozzle check, head cleaning, head alignment
   (Canon's own command files, sent through CUPS).
 - **Knows when the printer is stuck**: if a page sits in the queue for a long
@@ -91,6 +108,7 @@ yay -S pritingo
 ```
 
 This also pulls in Canon's driver, `cnijfilter-e400series`, from the AUR.
+For scanning, install SANE too: `sudo pacman -S sane`.
 
 ### Set up the printer once
 
@@ -111,7 +129,8 @@ under *More settings*.
 ### From source
 
 Needs Qt 6 (base, declarative, wayland), qmake6, make, a C++17 compiler,
-`poppler` (pdfinfo, pdftoppm, pdftops), `qpdf`, ImageMagick and `libnotify`.
+`poppler` (pdfinfo, pdftoppm, pdftops), `qpdf`, ImageMagick and `libnotify`, plus
+`sane` for scanning.
 
 ```sh
 bin/build      # build/pritingo
@@ -145,6 +164,7 @@ settings → Second pass*.
 | `A` | Select every page |
 | `+` `-` | More / fewer copies |
 | `W` | Close the file |
+| `S` | Scan from the glass (Space scans, `Ctrl+S` saves the PDF, `Ctrl+P` prints a copy, `C` black & white / color) |
 | `Esc` | Stop printing, close a panel |
 | `?` | Show the shortcuts |
 | `Q` | Quit (asks while printing) |
@@ -165,6 +185,14 @@ For each page, Pritingo:
 The original file is never modified; everything happens on a copy in a
 private temporary directory.
 
+A scan runs `scanimage` on the A4 area of the glass, or the whole glass for an
+ID card. To find the card, Pritingo looks at the scan at about 75 dpi,
+thresholds it a little below the lid's own brightness, closes the gaps the
+card's light areas leave, and takes the largest connected shape
+(ImageMagick's `-connected-components`), then trims the lid's color off the
+edges. The PDF is written with ImageMagick next to the chosen file and renamed
+into place.
+
 ## Known limitations
 
 - Only the Canon E400-series driver is wired in (see *Supported printers*).
@@ -177,6 +205,9 @@ private temporary directory.
   to find the right settings for your printer.
 - The maintenance commands use Canon's command files and have not been
   checked on every model.
+- Card detection needs the lid closed over a light background. A very light
+  card on a white lid may not be found; Pritingo then keeps the whole glass and
+  says so.
 
 ## Contributing
 
