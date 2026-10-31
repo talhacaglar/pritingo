@@ -129,7 +129,8 @@ Rectangle {
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.WordWrap
                     color: win.muted
-                    text: root.card ? qsTr("Face down, anywhere on the glass. Close the lid and press Space.")
+                    text: root.card || root.o.area === "auto" || root.o.area === "glass"
+                          ? qsTr("Face down, anywhere on the glass. Close the lid and press Space.")
                         : qsTr("Face down, against the corner with the arrow. Close the lid and press Space.")
                 }
             }
@@ -268,7 +269,30 @@ Rectangle {
                         Hint {
                             text: root.count > 0 ? qsTr("Clear the scans to switch.")
                                 : root.card ? qsTr("Scan the front, turn the card over, scan the back. Both sides go on one A4 page at their real size, like a photocopy.")
-                                : qsTr("Each scan becomes one A4 page.")
+                                : qsTr("Each scan becomes one page.")
+                        }
+
+                        Caption { visible: !root.card; text: qsTr("Size") }
+                        ComboBox {
+                            id: areaBox
+                            visible: !root.card
+                            enabled: !scanner.busy
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 20; Layout.rightMargin: 20
+                            textRole: "label"; valueRole: "value"
+                            model: [{ label: "A4", value: "A4" }, { label: "A5", value: "A5" },
+                                    { label: "Letter", value: "Letter" },
+                                    { label: qsTr("The whole glass"), value: "glass" },
+                                    { label: qsTr("Automatic: cut out what is on the glass"), value: "auto" }]
+                            currentIndex: Math.max(0, indexOfValue(root.o.area))
+                            onActivated: scanner.setOption("area", currentValue)
+                        }
+                        Hint {
+                            visible: !root.card
+                            text: root.o.area === "auto"
+                                ? qsTr("For photos, receipts and other small things: kept at their real size on an A4 page. White paper on the white lid is better scanned as A4.")
+                                : root.o.area === "glass" ? qsTr("Everything under the lid, edge to edge.")
+                                : qsTr("Put the page against the corner with the arrow.")
                         }
 
                         Caption { text: qsTr("Color") }

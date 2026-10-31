@@ -24,8 +24,8 @@ put back this many sheets, this one first, keep this one out because its
 back stays blank), raises a desktop notification with a sound, and prints
 the backs when you press Space.
 
-It also **scans** from the printer's glass, to a PDF or straight to a printed
-copy, with an **ID card** layout that cuts the card out of the scan and puts
+It also **scans** any page from the printer's glass, to a PDF or straight to
+a printed copy, with an **ID card** layout that cuts the card out of the scan and puts
 its front and back on one A4 page at their real size, like a photocopy.
 
 > 🇹🇷 **Türkçe:** Pritingo, Canon PIXMA E400 serisi yazıcılarla Linux'ta
@@ -81,8 +81,11 @@ should work as long as it has a CUPS queue, but this is untested.
 - **Second-pass controls**: print the backs in reverse order, or upside down,
   for however your printer stacks and feeds paper. A **two-sided test sheet**
   with arrows helps you find the right combination once.
-- **Scanning** (`S`): black and white or color, 150, 300 or 600 dpi. Each
-  scan shows as a page you can turn or remove. **Save as PDF** asks where
+- **Scanning** (`S`): any page, as A4, A5, Letter or the whole glass, or
+  **Automatic**, which cuts out whatever lies on the glass (a photo, a
+  receipt) and keeps it at its real size on an A4 page. Black and white or
+  color, 150, 300 or 600 dpi. Each scan shows as a page you can turn or
+  remove. **Save as PDF** asks where
   through the desktop's own dialog; **Print a copy** opens the scans like any
   document, so copies, two-sided and every print setting still apply.
 - **ID card copies**: lay the card anywhere on the glass, scan the front, turn
@@ -185,8 +188,8 @@ For each page, Pritingo:
 The original file is never modified; everything happens on a copy in a
 private temporary directory.
 
-A scan runs `scanimage` on the A4 area of the glass, or the whole glass for an
-ID card. To find the card, Pritingo looks at the scan at about 75 dpi,
+A scan runs `scanimage` on the chosen paper size from the glass's corner, or
+the whole glass for an ID card and for Automatic. To find the card or photo, Pritingo looks at the scan at about 75 dpi,
 thresholds it a little below the lid's own brightness, closes the gaps the
 card's light areas leave, and takes the largest connected shape
 (ImageMagick's `-connected-components`), then trims the lid's color off the
@@ -205,8 +208,8 @@ into place.
   to find the right settings for your printer.
 - The maintenance commands use Canon's command files and have not been
   checked on every model.
-- Card detection needs the lid closed over a light background. A very light
-  card on a white lid may not be found; Pritingo then keeps the whole glass and
+- Card and Automatic detection need the lid closed over a light background.
+  A very light card, or white paper, on the white lid may not be found; Pritingo then keeps the whole glass and
   says so.
 
 ## Contributing

@@ -14,9 +14,11 @@ class FilePicker;
 
 // Scans from the flatbed through SANE's scanimage and turns the scans into a
 // PDF, either to save or to hand to the printer side as a copy. Two layouts:
-// "document" keeps each scan as a full A4 page, and "card" finds the card on
-// the glass, cuts it out, and puts the two sides of each card on one page at
-// their real size, the way an ID card is photocopied.
+// "document" keeps each scan as a page of the chosen size (A4, A5, Letter,
+// the whole glass, or "auto", which cuts out whatever lies on the glass and
+// keeps it at its real size on an A4 page), and "card" finds the card,
+// cuts it out, and puts the two sides of each card on one page at their real
+// size, the way an ID card is photocopied.
 class Scanner : public QObject {
     Q_OBJECT
 
@@ -84,6 +86,9 @@ private:
         QString thumb;
         int resolution = 300;
         int version = 0;
+        // Cut out of the glass rather than scanned to a paper size, so it is
+        // placed on an A4 page at its real size.
+        bool cut = false;
     };
 
     FilePicker *m_picker;

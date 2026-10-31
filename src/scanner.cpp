@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QImageReader>
 #include <QRegularExpression>
 #include <QUrl>
@@ -15,7 +16,13 @@
 
 namespace {
 
-const QVariantMap Defaults{{"color", false}, {"resolution", 300}, {"layout", "document"}};
+const QVariantMap Defaults{{"color", false}, {"resolution", 300}, {"layout", "document"}, {"area", "A4"}};
+
+// Millimetres of each paper size, scanned from the glass's corner.
+QSizeF paperArea(const QString &area) {
+    static const QHash<QString, QSizeF> sizes{{"A4", {210, 297}}, {"A5", {148, 210}}, {"Letter", {215.9, 279.4}}};
+    return sizes.value(area);
+}
 
 // Card detection looks at the scan at about 75 dpi; that is plenty to find a
 // card's edges and keeps it fast at 600 dpi.
@@ -26,8 +33,8 @@ constexpr double AnalysisDpi = 75;
 constexpr double EdgeMillimeters = 3;
 
 // A card at 75 dpi is about 250 × 160 pixels; anything much smaller is dust
-// or a mark on the glass, not the card.
-constexpr int MinimumCardArea = 10000;
+// or a mark on the glass, not the card or the page.
+constexpr int MinimumShapeArea = 10000;
 
 int pixels(double millimeters, int dpi) { return int(std::lround(millimeters / 25.4 * dpi)); }
 
@@ -175,14 +182,15 @@ void Scanner::scan() {
     }
     setProblem({});
     const int resolution = m_options.value("resolution").toInt();
-    const bool card = m_options.value("layout") == "card";
+    const QSizeF area = m_options.value("layout") == "card" ? QSizeF() : paperArea(m_options.value("area").toString());
     const QString raw = m_work.filePath(QStringLiteral("raw-%1.png").arg(++m_counter));
     QStringList arguments{"-d", m_device, "--mode", m_options.value("color").toBool() ? "Color" : "Gray",
                           "--resolution", QString::number(resolution), "--format=png", "--progress", "-o", raw};
-    // A document is an A4 page against the glass's corner; a card can lie
-    // anywhere, so the whole glass is scanned and the card found afterwards.
-    if (!card)
-        arguments << "-l" << "0" << "-t" << "0" << "-x" << "210" << "-y" << "297";
+    // A paper size lies against the glass's corner; a card, the whole glass
+    // and "auto" scan everything, and auto and card find the shape afterwards.
+    if (area.isValid())
+        arguments << "-l" << "0" << "-t" << "0" << "-x" << QString::number(area.width()) << "-y"
+                  << QString::number(area.height());
 
     setStep(tr("Scanning"), 0);
     m_scan = new QProcess(this);
@@ -239,28 +247,30 @@ void Scanner::addScan(const QString &image, int resolution) {
     page.resolution = resolution;
     page.file = m_work.filePath(QStringLiteral("page-%1.png").arg(page.id));
 
-    auto finish = [this, page]() mutable {
+    auto finish = [this](const Page &page) {
         m_pages << page;
         setStep({});
         emit pagesChanged();
         thumbnail(page.id);
     };
 
-    if (m_options.value("layout") != "card") {
+    const bool card = m_options.value("layout") == "card";
+    page.cut = card || m_options.value("area") == "auto";
+    if (!page.cut) {
         if (!QFile::copy(image, page.file)) {
             setStep({});
             return setProblem(tr("Could not keep the scan."));
         }
         if (image.startsWith(m_work.path()))
             QFile::remove(image);
-        return finish();
+        return finish(page);
     }
 
-    // The card is the largest dark shape on the white lid: threshold a
-    // little below the lid's own brightness (its median, since the lid
-    // covers most of the glass), close the gaps the card's light areas
+    // The card (or photo, receipt…) is the largest dark shape on the white
+    // lid: threshold a little below the lid's own brightness (its median,
+    // since the lid covers most of the glass), close the gaps its light areas
     // leave, and take the biggest connected shape.
-    setStep(tr("Finding the card"), 1);
+    setStep(card ? tr("Finding the card") : tr("Finding the edges"), 1);
     const double scale = AnalysisDpi / resolution;
     const int edge = pixels(EdgeMillimeters, resolution);
     const QStringList prepare{image, "-shave", QStringLiteral("%1x%1").arg(edge), "-resize",
@@ -289,7 +299,7 @@ void Scanner::addScan(const QString &image, int resolution) {
                     for (auto it = shape.globalMatch(output); it.hasNext();) {
                         const auto m = it.next();
                         const qint64 area = m.captured(5).toLongLong();
-                        if (!m.captured(6).contains("255") || area < MinimumCardArea || area <= bestArea)
+                        if (!m.captured(6).contains("255") || area < MinimumShapeArea || area <= bestArea)
                             continue;
                         bestArea = area;
                         best = QRect(m.captured(3).toInt(), m.captured(4).toInt(), m.captured(1).toInt(),
@@ -305,10 +315,13 @@ void Scanner::addScan(const QString &image, int resolution) {
                             << QStringLiteral("%1x%2+%3+%4").arg(box.width()).arg(box.height()).arg(box.x()).arg(box.y())
                             << "+repage" << "-fuzz" << "10%" << "-trim" << "+repage";
                         // Cards are copied lying down; a card scanned upright turns.
-                        if (box.height() > box.width())
+                        if (card && box.height() > box.width())
                             cut << "-rotate" << "90";
                     } else {
-                        emit toast(tr("Could not find the card's edges; kept the whole glass"));
+                        // Kept as scanned: a whole glass is already page-sized.
+                        page.cut = card;
+                        emit toast(card ? tr("Could not find the card's edges; kept the whole glass")
+                                        : tr("Could not find the edges; kept the whole glass"));
                     }
                     run("magick", cut << page.file, [=, this](int code, const QString &, const QString &error) mutable {
                         if (image.startsWith(m_work.path()))
@@ -317,7 +330,7 @@ void Scanner::addScan(const QString &image, int resolution) {
                             setStep({});
                             return setProblem(tr("Could not read the scan: %1").arg(error));
                         }
-                        finish();
+                        finish(page);
                     });
                 });
         });
@@ -392,10 +405,23 @@ void Scanner::writePdf(const QString &target, std::function<void(const QString &
 
     if (m_options.value("layout") != "card") {
         // Each scan keeps its own resolution, so a page scanned at 150 dpi
-        // and one at 600 dpi both come out A4.
-        for (const auto &page : m_pages)
-            arguments << "(" << page.file << "-set" << "units" << "PixelsPerInch" << "-set" << "density"
-                      << QString::number(page.resolution) << ")";
+        // and one at 600 dpi both come out at their paper size. A cut-out
+        // goes on an A4 page at its real size, shrunk only if it would not fit.
+        for (const auto &page : m_pages) {
+            const QString dpi = QString::number(page.resolution);
+            if (!page.cut) {
+                arguments << "(" << page.file << "-set" << "units" << "PixelsPerInch" << "-set" << "density" << dpi
+                          << ")";
+                continue;
+            }
+            const int width = pixels(210, page.resolution), height = pixels(297, page.resolution);
+            const int margin = pixels(15, page.resolution);
+            arguments << "(" << "-size" << QStringLiteral("%1x%2").arg(width).arg(height) << "xc:white" << "("
+                      << page.file << "-resize"
+                      << QStringLiteral("%1x%2>").arg(width - 2 * margin).arg(height - 2 * margin) << ")"
+                      << "-gravity" << "north" << "-geometry" << QStringLiteral("+0+%1").arg(margin) << "-composite"
+                      << "-set" << "units" << "PixelsPerInch" << "-set" << "density" << dpi << ")";
+        }
     } else {
         // Two sides to a sheet at their real size: front above back, the way
         // a photocopy of an ID card looks.

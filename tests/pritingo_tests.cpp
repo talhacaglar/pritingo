@@ -192,6 +192,32 @@ private slots:
         scanner.setOption("layout", "document");
     }
 
+    void scannerCutsOutAPhotoOntoA4()
+    {
+        if (QStandardPaths::findExecutable("magick").isEmpty() || QStandardPaths::findExecutable("pdfinfo").isEmpty())
+            QSKIP("ImageMagick or poppler missing");
+        QTemporaryDir dir;
+        const QString glass = dir.filePath("glass.png");
+        makeGlass(glass);
+
+        Scanner scanner;
+        scanner.setOption("area", "auto");
+        scanner.addScan(glass, 300);
+        QTRY_COMPARE_WITH_TIMEOUT(scanner.pages().size(), 1, 20000);
+        QTRY_VERIFY_WITH_TIMEOUT(!scanner.busy(), 20000);
+        // Unlike a card, a cut-out keeps the way it lay on the glass.
+        QTRY_VERIFY_WITH_TIMEOUT(!scanner.pages().first().toMap().value("thumbnail").toString().isEmpty(), 20000);
+        const QString thumb = QUrl(scanner.pages().first().toMap().value("thumbnail").toString()).toLocalFile();
+        const QSize size = imageSize(QFileInfo(thumb).dir().filePath("page-" + QFileInfo(thumb).fileName().section('-', 1, 1) + ".png"));
+        QVERIFY2(size.height() > size.width(), qPrintable(QStringLiteral("%1x%2").arg(size.width()).arg(size.height())));
+        const QString pdf = dir.filePath("photo.pdf");
+        QString error = "pending";
+        scanner.writePdf(pdf, [&](const QString &e) { error = e; });
+        QTRY_COMPARE_WITH_TIMEOUT(error, QString(), 20000);
+        QCOMPARE(pdfPages(pdf), (QStringList{"595.2 x 841.92"}));
+        scanner.setOption("area", "A4");
+    }
+
     void scannerKeepsDocumentPagesA4()
     {
         if (QStandardPaths::findExecutable("magick").isEmpty() || QStandardPaths::findExecutable("pdfinfo").isEmpty())
@@ -256,7 +282,6 @@ private slots:
         scanner.setOption("resolution", 150);
         scanner.scan();
         QTRY_COMPARE_WITH_TIMEOUT(scanner.pages().size(), 1, 20000);
-        qputenv("PATH", path);
 
         QCOMPARE(scanner.device(), QString("pixma:04A9181E_X"));
         QCOMPARE(scanner.deviceName(), QString("Canon PIXMA E410 Series"));
@@ -266,6 +291,16 @@ private slots:
         QVERIFY2(used.contains("-d pixma:04A9181E_X --mode Gray --resolution 150"), qPrintable(used));
         QVERIFY(used.contains("-x 210 -y 297"));
         QVERIFY(scanner.problem().isEmpty());
+
+        // Other paper sizes scan just their area from the corner.
+        scanner.setOption("area", "A5");
+        scanner.scan();
+        QTRY_COMPARE_WITH_TIMEOUT(scanner.pages().size(), 2, 20000);
+        qputenv("PATH", path);
+        args.close();
+        QVERIFY(args.open(QIODevice::ReadOnly));
+        QVERIFY(QString::fromUtf8(args.readAll()).contains("-x 148 -y 210"));
+        scanner.setOption("area", "A4");
         scanner.setOption("resolution", 300);
     }
 

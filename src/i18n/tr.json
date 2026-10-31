@@ -233,7 +233,6 @@
   "ID card": "Kimlik kartı",
   "Clear the scans to switch.": "Değiştirmek için taramaları temizle.",
   "Scan the front, turn the card over, scan the back. Both sides go on one A4 page at their real size, like a photocopy.": "Ön yüzü tara, kartı çevir, arka yüzü tara. İki yüz de gerçek boyutunda tek bir A4 sayfaya yerleşir, fotokopi gibi.",
-  "Each scan becomes one A4 page.": "Her tarama bir A4 sayfa olur.",
   "Resolution": "Çözünürlük",
   "300 dpi suits documents and cards. 600 dpi is for small print and photos, and takes longer.": "300 dpi belge ve kartlar için yeterli. 600 dpi küçük yazı ve fotoğraflar içindir, daha uzun sürer.",
   "Clear the scans": "Taramaları temizle",
@@ -251,5 +250,13 @@
   "%n card(s)": {
     "one": "%n kart",
     "other": "%n kart"
-  }
+  },
+  "Each scan becomes one page.": "Her tarama bir sayfa olur.",
+  "The whole glass": "Camın tamamı",
+  "Automatic: cut out what is on the glass": "Otomatik: camdakini kesip al",
+  "For photos, receipts and other small things: kept at their real size on an A4 page. White paper on the white lid is better scanned as A4.": "Fotoğraf, fiş gibi küçük şeyler için: gerçek boyutunda bir A4 sayfaya konur. Beyaz kapak altındaki beyaz kağıdı A4 olarak taramak daha iyidir.",
+  "Everything under the lid, edge to edge.": "Kapağın altındaki her şey, kenardan kenara.",
+  "Put the page against the corner with the arrow.": "Sayfayı oklu köşeye daya.",
+  "Finding the edges": "Kenarlar aranıyor",
+  "Could not find the edges; kept the whole glass": "Kenarlar bulunamadı; camın tamamı alındı"
 }
