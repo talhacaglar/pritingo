@@ -58,6 +58,35 @@ Rectangle {
             }
         }
 
+        // Always at hand while a document is open, not only once it printed.
+        Button {
+            id: newPrint
+            visible: backend.pageCount > 0 || backend.loading
+            enabled: !win.busy
+            Layout.preferredHeight: 32
+            leftPadding: 14
+            rightPadding: 14
+            topInset: 0
+            bottomInset: 0
+            font.pixelSize: 13
+            text: "＋  " + qsTr("New print")
+            onClicked: backend.newPrint()
+            ToolTip.visible: hovered
+            ToolTip.delay: 500
+            ToolTip.text: qsTr("Clear these pages and choose new files  (N)")
+            contentItem: Label {
+                text: newPrint.text
+                font: newPrint.font
+                color: newPrint.enabled ? "white" : win.muted
+                verticalAlignment: Text.AlignVCenter
+            }
+            background: Rectangle {
+                radius: Math.min(16, theme.radius * 2)
+                color: newPrint.down ? "#2a2a31" : newPrint.hovered ? "#26262c" : "#1f1f25"
+                border.color: newPrint.hovered ? theme.accent : win.line
+            }
+        }
+
         // Printer status: green when it is on the USB bus, red when it is not.
         Rectangle {
             id: chip

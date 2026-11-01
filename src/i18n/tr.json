@@ -277,5 +277,7 @@
   "The printer is connected": "Yazıcı bağlandı",
   "New print  (N)": "Yeni baskı  (N)",
   "New print…": "Yeni baskı…",
-  "New print: clear and choose new files": "Yeni baskı: temizle ve yeni dosya seç"
+  "New print: clear and choose new files": "Yeni baskı: temizle ve yeni dosya seç",
+  "New print": "Yeni baskı",
+  "Clear these pages and choose new files  (N)": "Bu sayfaları temizle ve yeni dosya seç  (N)"
 }
