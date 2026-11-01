@@ -49,7 +49,7 @@ Item {
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
-                text: backend.loading ? qsTr("Opening…") : qsTr("Drop a file here")
+                text: backend.loading ? qsTr("Opening…") : qsTr("Drop files here")
                 font.pixelSize: 24
                 font.weight: Font.DemiBold
             }
@@ -62,8 +62,8 @@ Item {
             AccentButton {
                 Layout.alignment: Qt.AlignHCenter
                 enabled: !backend.loading
-                text: qsTr("Choose a file  (O)")
-                onClicked: backend.pickFile()
+                text: qsTr("Choose files  (O)")
+                onClicked: backend.pickFiles()
             }
             Button {
                 Layout.alignment: Qt.AlignHCenter

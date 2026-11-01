@@ -34,5 +34,13 @@
   "%n card(s)": {
     "one": "%n card",
     "other": "%n cards"
+  },
+  "%n file(s)": {
+    "one": "%n file",
+    "other": "%n files"
+  },
+  "%n page(s) from %1 are ready.": {
+    "one": "%n page from %1 is ready.",
+    "other": "%n pages from %1 are ready."
   }
 }

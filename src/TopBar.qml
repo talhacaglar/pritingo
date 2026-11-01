@@ -45,6 +45,10 @@ Rectangle {
                 font.weight: Font.DemiBold
                 elide: Text.ElideMiddle
                 Layout.fillWidth: true
+                // Several files show as a count; hovering lists them in order.
+                HoverHandler { id: titleHover }
+                ToolTip.visible: titleHover.hovered && backend.fileNames.length > 1
+                ToolTip.text: backend.fileNames.join("\n")
             }
             Label {
                 visible: backend.pageCount > 0 || backend.loading
@@ -103,7 +107,8 @@ Rectangle {
             Menu {
                 id: menu
                 y: parent.height
-                MenuItem { text: qsTr("Open a file…"); enabled: !win.busy; onTriggered: backend.pickFile() }
+                MenuItem { text: qsTr("Open files…"); enabled: !win.busy; onTriggered: backend.pickFiles() }
+                MenuItem { text: qsTr("Add files at the end…"); enabled: !win.busy && !backend.loading && backend.pageCount > 0; onTriggered: backend.pickFilesToAdd() }
                 MenuItem { text: qsTr("Close the file"); enabled: !win.busy && backend.pageCount > 0; onTriggered: backend.closeFile() }
                 MenuItem { text: qsTr("Scan…"); enabled: !win.busy && !win.scanOpen; onTriggered: win.scanOpen = true }
                 MenuSeparator {}

@@ -1,8 +1,8 @@
 {
   "Opening…": "Açılıyor…",
-  "Drop a file here": "Bir dosyayı buraya bırak",
+  "Drop files here": "Dosyaları buraya bırak",
   "PDF, Word, Excel, PowerPoint, LibreOffice documents and pictures": "PDF, Word, Excel, PowerPoint, LibreOffice belgeleri ve resimler",
-  "Choose a file  (O)": "Dosya seç  (O)",
+  "Choose files  (O)": "Dosya seç  (O)",
   "Printing stopped": "Baskı durdu",
   "All done": "Hepsi tamam",
   "%n page(s) printed": {
@@ -25,7 +25,7 @@
   "If the backs come out upside down or on the wrong sheets, change “Second pass” under More settings.": "Arka yüzler ters ya da yanlış kağıda basılırsa, Diğer ayarlar altındaki “İkinci tur” seçeneklerini değiştir.",
   "Continue with the backs    ␣": "Arka yüzlere devam et    ␣",
   "Stop": "Durdur",
-  "Open a file": "Dosya aç",
+  "Open files": "Dosya aç",
   "Print, or continue with the backs": "Yazdır ya da arka yüzlere devam et",
   "One-sided / two-sided": "Tek yüz / arkalı önlü",
   "Black & white / color": "Siyah-beyaz / renkli",
@@ -135,7 +135,7 @@
   },
   "%1 · ready": "%1 · hazır",
   "More": "Diğer",
-  "Open a file…": "Dosya aç…",
+  "Open files…": "Dosya aç…",
   "Two-sided test sheet": "Arkalı önlü deneme sayfası",
   "Printer maintenance": "Yazıcı bakımı",
   "Print a nozzle check": "Püskürtme ucu kontrolü bas",
@@ -147,9 +147,9 @@
   "%1 is not installed": "%1 kurulu değil",
   "No printer is set up in CUPS.": "CUPS'ta kurulu yazıcı yok.",
   "CUPS is not installed (lpstat is missing).": "CUPS kurulu değil (lpstat yok).",
-  "Choose a file to print": "Yazdırılacak dosyayı seç",
+  "Choose files to print": "Yazdırılacak dosyaları seç",
   "“%1” does not exist.": "“%1” bulunamadı.",
-  "Could not open this file: %1": "Bu dosya açılamadı: %1",
+  "Could not open “%1”: %2": "“%1” açılamadı: %2",
   "conversion failed": "dönüştürme başarısız",
   "cannot read the file": "dosya okunamıyor",
   "This file has no printable pages.": "Bu dosyada basılacak sayfa yok.",
@@ -258,5 +258,21 @@
   "Everything under the lid, edge to edge.": "Kapağın altındaki her şey, kenardan kenara.",
   "Put the page against the corner with the arrow.": "Sayfayı oklu köşeye daya.",
   "Finding the edges": "Kenarlar aranıyor",
-  "Could not find the edges; kept the whole glass": "Kenarlar bulunamadı; camın tamamı alındı"
+  "Could not find the edges; kept the whole glass": "Kenarlar bulunamadı; camın tamamı alındı",
+  "Add files at the end": "Sona dosya ekle",
+  "Add files at the end…": "Sona dosya ekle…",
+  "Drop to add at the end": "Sona eklemek için bırak",
+  "Choose files to add at the end": "Sona eklenecek dosyaları seç",
+  "“%1” has no printable pages.": "“%1” içinde basılacak sayfa yok.",
+  "Could not join the files: %1": "Dosyalar birleştirilemedi: %1",
+  "%n file(s)": {
+    "one": "%n dosya",
+    "other": "%n dosya"
+  },
+  "%n page(s) from %1 are ready.": {
+    "one": "%n sayfa hazır (%1).",
+    "other": "%n sayfa hazır (%1)."
+  },
+  "The printer is not connected. Turn it on and check its USB cable, then try again.": "Yazıcı bağlı değil. Yazıcıyı aç ve USB kablosunu kontrol et, sonra tekrar dene.",
+  "The printer is connected": "Yazıcı bağlandı"
 }

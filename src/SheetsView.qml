@@ -11,6 +11,8 @@ Item {
 
     readonly property var selected: backend.selectedPages
     readonly property var landscape: backend.landscapePages
+    // With several files, each one's first page carries its name on top.
+    readonly property bool named: backend.fileNames.length > 1
 
     ColumnLayout {
         anchors.fill: parent
@@ -54,7 +56,7 @@ Item {
 
             readonly property int columns: Math.max(1, Math.floor(width / (root.mode === "pages" ? 170 : 310)))
             cellWidth: Math.floor(width / columns)
-            cellHeight: root.mode === "pages" ? cellWidth * 1.42 + 34 : (cellWidth - 40) / 2 * 1.42 + 74
+            cellHeight: root.mode === "pages" ? cellWidth * 1.42 + 34 + (root.named ? 20 : 0) : (cellWidth - 40) / 2 * 1.42 + 74
 
             model: root.mode === "pages" ? backend.pageCount : backend.sheetModel
 
@@ -149,9 +151,23 @@ Item {
         Item {
             readonly property int page: parent ? parent.pageNumber : 0
             readonly property bool included: root.selected.indexOf(page) >= 0
+            readonly property int file: root.named ? backend.fileStarts.indexOf(page) : -1
 
+            Label {
+                visible: parent.file >= 0
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideMiddle
+                text: visible ? backend.fileNames[parent.file] : ""
+                color: theme.accent
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+            }
             Thumb {
                 anchors.fill: parent
+                anchors.topMargin: root.named ? 20 : 0
                 anchors.bottomMargin: 26
                 page: parent.page
                 included: parent.included

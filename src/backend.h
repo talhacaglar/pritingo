@@ -12,6 +12,7 @@
 #include <QVariantMap>
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include "planner.h"
 
@@ -23,6 +24,9 @@ class FilePicker;
 // single-page jobs with a pause between them always come out. So each page
 // goes out as its own raw job, and the next waits until the job has left the
 // queue and the printer has settled.
+//
+// A document is one or more files, each turned into a PDF and joined in
+// order, so a stack of papers goes out in one run.
 class Backend : public QObject {
     Q_OBJECT
 
@@ -35,6 +39,8 @@ class Backend : public QObject {
 
     // Document
     Q_PROPERTY(QString fileName READ fileName NOTIFY documentChanged)
+    Q_PROPERTY(QStringList fileNames READ fileNames NOTIFY documentChanged)
+    Q_PROPERTY(QVariantList fileStarts READ fileStarts NOTIFY documentChanged)
     Q_PROPERTY(int pageCount READ pageCount NOTIFY documentChanged)
     Q_PROPERTY(bool loading READ loading NOTIFY documentChanged)
     Q_PROPERTY(QStringList thumbnails READ thumbnails NOTIFY documentChanged)
@@ -66,7 +72,9 @@ class Backend : public QObject {
     Q_PROPERTY(int lastBlankPage READ lastBlankPage NOTIFY jobChanged)
 
 public:
-    explicit Backend(FilePicker *picker = nullptr, QObject *parent = nullptr);
+    // usbDevices is where printers are looked for; the tests point it elsewhere.
+    explicit Backend(FilePicker *picker = nullptr, QObject *parent = nullptr,
+                     const QString &usbDevices = QStringLiteral("/sys/bus/usb/devices"));
     ~Backend() override;
 
     QStringList printers() const { return m_printers; }
@@ -76,7 +84,9 @@ public:
     int printerQueue() const { return m_printerQueue; }
     QString problem() const { return m_problem; }
 
-    QString fileName() const { return m_fileName; }
+    QString fileName() const;
+    QStringList fileNames() const;
+    QVariantList fileStarts() const;
     int pageCount() const { return m_pageSizes.size(); }
     bool loading() const { return m_loading; }
     QStringList thumbnails() const { return m_thumbnails; }
@@ -104,8 +114,13 @@ public:
     int elapsedSeconds() const;
     int lastBlankPage() const;
 
-    Q_INVOKABLE void pickFile();
+    Q_INVOKABLE void pickFiles();
+    Q_INVOKABLE void pickFilesToAdd();
     Q_INVOKABLE void openFile(const QString &pathOrUrl);
+    // Several files become one document, in the order given or, for a
+    // chooser or a drop where the order is the desktop's, by file name.
+    Q_INVOKABLE void openFiles(const QStringList &pathsOrUrls, bool byName = false);
+    Q_INVOKABLE void addFiles(const QStringList &pathsOrUrls, bool byName = false);
     Q_INVOKABLE void closeFile();
     Q_INVOKABLE void setOption(const QString &key, const QVariant &value);
     Q_INVOKABLE void resetAdvanced();
@@ -122,6 +137,7 @@ public:
     Q_INVOKABLE void testDuplexOrientation();
 
     static QString driverPpd();
+    static QString fitSheetToWidth(QString xml);
 
 signals:
     void printerChanged();
@@ -139,11 +155,26 @@ private:
     void run(const QString &program, const QStringList &arguments, Done done,
              const QString &stdoutFile = {}, const QProcessEnvironment &environment = {});
 
+    // One opened file, converted to a PDF of its own in m_work.
+    struct Part {
+        QString name;
+        QString pdf;
+        int pages = 0;
+    };
+
     void setProblem(const QString &problem);
     void setStep(const QString &step);
-    void loadPdf();
+    void load(const QStringList &pathsOrUrls, bool byName, bool append);
+    void convertNext(const QStringList &paths, int index, const QList<Part> &parts, int generation);
+    void convert(const QString &path, const QString &base, int generation, Done done);
+    void fitSheetsToWidth(const QString &xlsx, std::function<void()> done);
+    void join(const QList<Part> &parts, int generation);
+    void loadFailed(const QString &message);
+    void loadPdf(const std::optional<QList<int>> &selection = std::nullopt);
     void refreshPrinters();
     void pollPrinter();
+    bool printerOffline();
+    QString offlineProblem() const;
     void replan();
     void setSelection(const QList<int> &pages);
 
@@ -160,6 +191,7 @@ private:
     std::unique_ptr<FilePicker> m_ownedPicker;
     QSettings m_settings;
 
+    QString m_usbDevices;
     QStringList m_printers;
     QString m_printer;
     QString m_deviceUri;
@@ -170,7 +202,9 @@ private:
     QProcess *m_queueProbe = nullptr;
 
     std::unique_ptr<QTemporaryDir> m_work;
-    QString m_fileName;
+    QList<Part> m_parts;
+    int m_nextPart = 0;
+    bool m_pickToAdd = false;
     bool m_loading = false;
     QList<QSizeF> m_pageSizes;
     QList<int> m_pageRotations;

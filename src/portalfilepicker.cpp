@@ -57,6 +57,7 @@ void PortalFilePicker::open(const QString &title, const QStringList &patterns) {
 
     QVariantMap options;
     options["filters"] = QVariant::fromValue(QList<PortalFilter>{documents, everything});
+    options["multiple"] = true;
     m_saving = false;
     request("OpenFile", title, options);
 }
@@ -116,9 +117,10 @@ void PortalFilePicker::response(uint code, const QVariantMap &results) {
     const QStringList uris = results.value("uris").toStringList();
     if (uris.isEmpty())
         return;
-    const QString path = QUrl(uris.first()).toLocalFile();
     if (m_saving)
-        emit savePicked(path);
-    else
-        emit picked(path);
+        return emit savePicked(QUrl(uris.first()).toLocalFile());
+    QStringList paths;
+    for (const auto &uri : uris)
+        paths << QUrl(uri).toLocalFile();
+    emit picked(paths);
 }

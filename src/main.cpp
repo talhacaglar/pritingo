@@ -50,10 +50,11 @@ int main(int argc, char *argv[]) {
     if (engine.rootObjects().isEmpty())
         return 1;
 
-    // A file handed over by the launcher or a file manager opens right away.
+    // Files handed over by the launcher or a file manager open right away,
+    // joined in the order given.
     const QStringList arguments = app.arguments().mid(1);
     if (!arguments.isEmpty())
-        QTimer::singleShot(0, &backend, [&backend, file = arguments.first()] { backend.openFile(file); });
+        QTimer::singleShot(0, &backend, [&backend, arguments] { backend.openFiles(arguments); });
 
     return app.exec();
 }

@@ -4,7 +4,7 @@ pkgrel=1
 pkgdesc='Print on Canon PIXMA E400-series printers one page per job, with guided two-sided printing, and scan to PDF'
 arch=('x86_64' 'aarch64')
 license=('MIT')
-depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'xdg-desktop-portal' 'cups' 'poppler' 'qpdf'
+depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'xdg-desktop-portal' 'cups' 'poppler' 'qpdf' 'libarchive'
          'imagemagick' 'libnotify')
 optdepends=('cnijfilter-e400series: the Canon driver that renders the pages (AUR)'
             'libreoffice-fresh: open Word, Excel, PowerPoint and LibreOffice files'

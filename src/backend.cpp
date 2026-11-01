@@ -25,6 +25,7 @@ constexpr int SecondsPerPage = 30;
 constexpr int StallSeconds = 75;
 
 const QStringList ImageSuffixes{"jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff"};
+const QStringList SheetSuffixes{"xlsx", "xls", "ods"};
 
 const QVariantMap Defaults{
     {"duplex", false},     {"color", false},      {"quality", 3},       {"media", "plain"},
@@ -35,6 +36,14 @@ const QVariantMap Defaults{
 };
 
 const QStringList AdvancedKeys{"brightness", "density", "contrast", "cyan", "magenta", "yellow", "cartridges"};
+
+QStringList printablePatterns() {
+    QStringList patterns{"*.pdf", "*.PDF", "*.docx", "*.doc", "*.odt", "*.rtf", "*.txt", "*.xlsx", "*.xls",
+                         "*.ods", "*.pptx", "*.ppt", "*.odp"};
+    for (const auto &suffix : ImageSuffixes)
+        patterns << "*." + suffix << "*." + suffix.toUpper();
+    return patterns;
+}
 
 // Points for the driver's page sizes, portrait.
 QSizeF paperSize(const QString &name) {
@@ -48,8 +57,8 @@ QSizeF paperSize(const QString &name) {
 
 // Any USB interface of class 07 is a printer, whether or not usblp has it;
 // this is how the app tells "connected" from "unplugged or off".
-bool usbPrinterPresent() {
-    QDirIterator it("/sys/bus/usb/devices", QDir::Dirs | QDir::NoDotAndDotDot);
+bool usbPrinterPresent(const QString &devices) {
+    QDirIterator it(devices, QDir::Dirs | QDir::NoDotAndDotDot);
     while (it.hasNext()) {
         QFile file(it.next() + "/bInterfaceClass");
         if (file.open(QIODevice::ReadOnly) && file.readAll().trimmed() == "07")
@@ -60,13 +69,15 @@ bool usbPrinterPresent() {
 
 } // namespace
 
-Backend::Backend(FilePicker *picker, QObject *parent)
-    : QObject(parent), m_picker(picker), m_settings("pritingo", "pritingo") {
+Backend::Backend(FilePicker *picker, QObject *parent, const QString &usbDevices)
+    : QObject(parent), m_picker(picker), m_settings("pritingo", "pritingo"), m_usbDevices(usbDevices) {
     if (!m_picker) {
         m_ownedPicker = std::make_unique<PortalFilePicker>();
         m_picker = m_ownedPicker.get();
     }
-    connect(m_picker, &FilePicker::picked, this, &Backend::openFile);
+    connect(m_picker, &FilePicker::picked, this, [this](const QStringList &paths) {
+        load(paths, true, m_pickToAdd);
+    });
     connect(m_picker, &FilePicker::failed, this, &Backend::setProblem);
 
     // QSettings hands values back as strings; QML compares strictly, so give
@@ -194,10 +205,15 @@ void Backend::setPrinter(const QString &printer) {
 }
 
 void Backend::pollPrinter() {
-    const bool connected = usbPrinterPresent();
+    const bool connected = usbPrinterPresent(m_usbDevices);
     if (connected != m_printerConnected) {
         m_printerConnected = connected;
         emit printerChanged();
+        // The warning from pressing Print goes once the printer is back.
+        if (connected && m_problem == offlineProblem()) {
+            setProblem({});
+            emit toast(tr("The printer is connected"));
+        }
     }
     if (m_printer.isEmpty() || m_queueProbe)
         return;
@@ -218,73 +234,325 @@ void Backend::pollPrinter() {
     m_queueProbe->start("lpstat", {"-o", m_printer});
 }
 
+// Looks again right now rather than trusting the last poll, so a printer
+// switched off a second ago does not get a job that only waits in the queue.
+// Only a USB queue (or one whose device is not known yet; the E410 is USB)
+// can be checked this way, so a network printer is always let through.
+bool Backend::printerOffline() {
+    pollPrinter();
+    const bool usb = m_deviceUri.isEmpty() || m_deviceUri.startsWith("usb:");
+    return usb && !m_printerConnected;
+}
+
+QString Backend::offlineProblem() const {
+    return tr("The printer is not connected. Turn it on and check its USB cable, then try again.");
+}
+
 // ---------------------------------------------------------------- document
 
-void Backend::pickFile() {
-    QStringList patterns{"*.pdf", "*.PDF", "*.docx", "*.doc", "*.odt", "*.rtf", "*.txt", "*.xlsx", "*.xls",
-                         "*.ods", "*.pptx", "*.ppt", "*.odp"};
-    for (const auto &suffix : ImageSuffixes)
-        patterns << "*." + suffix << "*." + suffix.toUpper();
-    m_picker->open(tr("Choose a file to print"), patterns);
+void Backend::pickFiles() {
+    m_pickToAdd = false;
+    m_picker->open(tr("Choose files to print"), printablePatterns());
+}
+
+void Backend::pickFilesToAdd() {
+    if (m_parts.isEmpty())
+        return pickFiles();
+    m_pickToAdd = true;
+    m_picker->open(tr("Choose files to add at the end"), printablePatterns());
 }
 
 void Backend::openFile(const QString &pathOrUrl) {
-    if (m_state == "printing" || m_state == "flip")
+    load({pathOrUrl}, false, false);
+}
+
+void Backend::openFiles(const QStringList &pathsOrUrls, bool byName) {
+    load(pathsOrUrls, byName, false);
+}
+
+void Backend::addFiles(const QStringList &pathsOrUrls, bool byName) {
+    load(pathsOrUrls, byName, true);
+}
+
+void Backend::load(const QStringList &pathsOrUrls, bool byName, bool append) {
+    if (m_state == "printing" || m_state == "flip" || (append && m_loading))
         return;
-    const QString path = pathOrUrl.startsWith("file:") ? QUrl(pathOrUrl).toLocalFile() : pathOrUrl;
-    QFileInfo info(path);
-    if (!info.isFile()) {
-        setProblem(tr("“%1” does not exist.").arg(path));
+    QStringList paths;
+    for (const auto &item : pathsOrUrls) {
+        const QString path = item.startsWith("file:") ? QUrl(item).toLocalFile() : item;
+        if (!QFileInfo(path).isFile()) {
+            setProblem(tr("“%1” does not exist.").arg(path));
+            return;
+        }
+        paths << path;
+    }
+    if (paths.isEmpty())
         return;
+    if (byName) {
+        QCollator collator;
+        collator.setNumericMode(true);
+        collator.setCaseSensitivity(Qt::CaseInsensitive);
+        std::sort(paths.begin(), paths.end(), [&collator](const QString &a, const QString &b) {
+            return collator.compare(QFileInfo(a).fileName(), QFileInfo(b).fileName()) < 0;
+        });
     }
 
     const int generation = ++m_loadGeneration;
-    m_work = std::make_unique<QTemporaryDir>(QDir::tempPath() + "/pritingo-XXXXXX");
-    m_fileName = info.fileName();
-    m_pageSizes.clear();
-    m_pageRotations.clear();
-    m_thumbnails.clear();
-    m_grayThumbnails.clear();
+    if (!append || m_parts.isEmpty()) {
+        m_work = std::make_unique<QTemporaryDir>(QDir::tempPath() + "/pritingo-XXXXXX");
+        m_parts.clear();
+        m_pageSizes.clear();
+        m_pageRotations.clear();
+        m_thumbnails.clear();
+        m_grayThumbnails.clear();
+    }
     m_loading = true;
     m_state = "idle";
     setProblem({});
     emit documentChanged();
     emit jobChanged();
-
-    const QString target = m_work->filePath("in.pdf");
-    const QString suffix = info.suffix().toLower();
-    auto converted = [this, generation, target](int code, const QString &error) {
-        if (generation != m_loadGeneration)
-            return;
-        if (code != 0 || !QFileInfo::exists(target)) {
-            m_loading = false;
-            emit documentChanged();
-            setProblem(tr("Could not open this file: %1").arg(error.isEmpty() ? tr("conversion failed") : error));
-            return;
-        }
-        loadPdf();
-    };
-
-    // The original is never touched; everything works on a copy in m_work.
-    if (suffix == "pdf") {
-        const bool copied = QFile::copy(path, target);
-        converted(copied ? 0 : 1, copied ? QString() : tr("cannot read the file"));
-    } else if (ImageSuffixes.contains(suffix)) {
-        run("magick", {path, "-auto-orient", target}, converted);
-    } else {
-        // LibreOffice names its output after the input; copy under a plain name
-        // first so odd characters in the original never matter.
-        const QString copy = m_work->filePath("in." + suffix);
-        QFile::copy(path, copy);
-        run("soffice", {"--headless", "--convert-to", "pdf", "--outdir", m_work->path(), copy}, converted);
-    }
+    convertNext(paths, 0, m_parts, generation);
 }
 
-void Backend::loadPdf() {
+// One file at a time: LibreOffice does not run twice at once on one profile.
+// The document changes only once every file has converted, so a file that
+// fails to open leaves what was already open as it was.
+void Backend::convertNext(const QStringList &paths, int index, const QList<Part> &parts, int generation) {
+    if (generation != m_loadGeneration)
+        return;
+    if (index == paths.size())
+        return join(parts, generation);
+    const QString name = QFileInfo(paths[index]).fileName();
+    const QString base = m_work->filePath(QStringLiteral("part-%1").arg(m_nextPart++));
+    convert(paths[index], base, generation, [=, this](int code, const QString &error) {
+        if (generation != m_loadGeneration)
+            return;
+        const QString pdf = base + ".pdf";
+        if (code != 0 || !QFileInfo::exists(pdf))
+            return loadFailed(
+                tr("Could not open “%1”: %2").arg(name, error.isEmpty() ? tr("conversion failed") : error));
+        auto *info = new QProcess(this);
+        connect(info, &QProcess::finished, this, [=, this] {
+            const QString out = QString::fromUtf8(info->readAllStandardOutput());
+            info->deleteLater();
+            if (generation != m_loadGeneration)
+                return;
+            const int pages = QRegularExpression(R"(Pages:\s+(\d+))").match(out).captured(1).toInt();
+            if (pages < 1)
+                return loadFailed(tr("“%1” has no printable pages.").arg(name));
+            convertNext(paths, index + 1, parts + QList<Part>{{name, pdf, pages}}, generation);
+        });
+        connect(info, &QProcess::errorOccurred, this, [this, info](QProcess::ProcessError) {
+            info->deleteLater();
+            loadFailed(tr("poppler is not installed (pdfinfo is missing)."));
+        });
+        info->start("pdfinfo", {pdf});
+    });
+}
+
+// Turns one file into base.pdf. The original is never touched; everything
+// works on copies next to base.
+void Backend::convert(const QString &path, const QString &base, int generation, Done done) {
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    const QString pdf = base + ".pdf";
+    if (suffix == "pdf") {
+        const bool copied = QFile::copy(path, pdf);
+        return done(copied ? 0 : 1, copied ? QString() : tr("cannot read the file"));
+    }
+    if (ImageSuffixes.contains(suffix))
+        return run("magick", {path, "-auto-orient", pdf}, done);
+
+    // LibreOffice names its output after the input; copy under a plain name
+    // first so odd characters in the original never matter.
+    const QString copy = base + "." + suffix;
+    QFile::copy(path, copy);
+    const QString dir = QFileInfo(base).absolutePath();
+    auto toPdf = [this, dir, done](const QString &input) {
+        run("soffice", {"--headless", "--convert-to", "pdf", "--outdir", dir, input}, done);
+    };
+    if (!SheetSuffixes.contains(suffix))
+        return toPdf(copy);
+
+    // LibreOffice cuts a sheet wider than the paper into columns on pages of
+    // their own, so a form ends up split down the middle. Every sheet is
+    // fitted to the paper's width instead, as many pages tall as it needs.
+    // xlsx is where that setting is simple to change, so the other formats
+    // pass through it; if anything on the way fails, the sheet prints as is.
+    const QString xlsx = base + ".xlsx";
+    auto fit = [=, this] {
+        fitSheetsToWidth(xlsx, [=, this] {
+            if (generation == m_loadGeneration)
+                toPdf(xlsx);
+        });
+    };
+    if (suffix == "xlsx")
+        return fit();
+    const QString converted = base + "-xlsx";
+    run("soffice", {"--headless", "--convert-to", "xlsx", "--outdir", converted, copy},
+        [=, this](int code, const QString &) {
+            if (generation != m_loadGeneration)
+                return;
+            if (code != 0 || !QFile::rename(converted + "/" + QFileInfo(base).fileName() + ".xlsx", xlsx))
+                return toPdf(copy);
+            fit();
+        });
+}
+
+void Backend::fitSheetsToWidth(const QString &xlsx, std::function<void()> done) {
+    // An xlsx is a zip of XML parts; bsdtar comes with libarchive, which
+    // pacman itself needs.
+    const QString dir = xlsx + "-parts";
+    QDir().mkpath(dir);
+    run("bsdtar", {"-xf", xlsx, "-C", dir}, [=, this](int code, const QString &) {
+        bool changed = false;
+        // A zip can hold symlinks; only files that really lie inside dir are
+        // rewritten, never something a link points to elsewhere.
+        const QString root = QDir(dir).canonicalPath() + "/";
+        const auto sheets = QDir(dir + "/xl/worksheets").entryInfoList({"*.xml"}, QDir::Files);
+        for (const auto &sheet : code == 0 ? sheets : QFileInfoList{}) {
+            if (!sheet.canonicalFilePath().startsWith(root))
+                continue;
+            QFile file(sheet.filePath());
+            if (!file.open(QIODevice::ReadOnly))
+                continue;
+            const QString xml = QString::fromUtf8(file.readAll());
+            const QString fitted = fitSheetToWidth(xml);
+            file.close();
+            if (fitted == xml || !file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+                continue;
+            file.write(fitted.toUtf8());
+            changed = true;
+        }
+        if (!changed)
+            return done();
+        // The names come from the file, so each goes in as ./name: one that
+        // starts with - or @ must not read as an option or an archive to
+        // include. -s takes the ./ off again, since LibreOffice does not open
+        // an xlsx whose parts are stored under ./.
+        const QString fitted = dir + ".xlsx";
+        QStringList entries;
+        for (const auto &entry : QDir(dir).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden))
+            entries << "./" + entry;
+        run("bsdtar", QStringList{"--format", "zip", "-s", R"(,^\./,,)", "-cf", fitted, "-C", dir, "--"} + entries,
+            [=](int code, const QString &) {
+                if (code == 0 && QFile::remove(xlsx))
+                    QFile::rename(fitted, xlsx);
+                done();
+            });
+    });
+}
+
+// Fits one worksheet's XML to the paper's width and leaves its height free:
+// fitToPage on the sheet, fitToWidth 1 and fitToHeight 0 ("as many as it
+// takes") on its page setup. A sheet whose author already fitted it keeps
+// that choice, and one written in a way this does not recognise stays as is.
+QString Backend::fitSheetToWidth(QString xml) {
+    static const QRegularExpression fitted(R"re(<pageSetUpPr\b[^>]*\bfitToPage="(1|true)")re");
+    static const QRegularExpression setup(R"(<pageSetup\b[^>]*>)");
+    static const QRegularExpression margins(R"(<pageMargins\b[^>]*/>)");
+    static const QRegularExpression fitAttributes(R"re(\s(fitToWidth|fitToHeight)="[^"]*")re");
+    static const QRegularExpression setUpPr(R"(<pageSetUpPr\b[^>]*/>)");
+    static const QRegularExpression emptySheetPr(R"(<sheetPr\b([^>]*)/>)");
+    static const QRegularExpression worksheet(R"(<worksheet\b[^>]*>)");
+    if (fitted.match(xml).hasMatch())
+        return xml;
+
+    // Without a pageSetup the fit would default to one page tall as well.
+    // It belongs right after pageMargins in the schema's order.
+    if (const auto match = setup.match(xml); match.hasMatch()) {
+        QString element = match.captured(0);
+        element.remove(fitAttributes).insert(10, R"( fitToWidth="1" fitToHeight="0")");
+        xml.replace(match.capturedStart(), match.capturedLength(), element);
+    } else if (const auto match = margins.match(xml); match.hasMatch()) {
+        xml.insert(match.capturedEnd(), R"(<pageSetup fitToWidth="1" fitToHeight="0"/>)");
+    } else {
+        return xml;
+    }
+
+    // pageSetUpPr is the last thing in sheetPr, which comes first in the sheet.
+    const QString fitToPage = R"(<pageSetUpPr fitToPage="1"/>)";
+    if (const auto match = setUpPr.match(xml); match.hasMatch())
+        xml.replace(match.capturedStart(), match.capturedLength(), fitToPage);
+    else if (const auto match = emptySheetPr.match(xml); match.hasMatch())
+        xml.replace(match.capturedStart(), match.capturedLength(),
+                    "<sheetPr" + match.captured(1) + ">" + fitToPage + "</sheetPr>");
+    else if (const int end = xml.indexOf("</sheetPr>"); end >= 0)
+        xml.insert(end, fitToPage);
+    else if (const auto match = worksheet.match(xml); match.hasMatch())
+        xml.insert(match.capturedEnd(), "<sheetPr>" + fitToPage + "</sheetPr>");
+    return xml;
+}
+
+// Joins every part into in.pdf, keeping the pages the user left out of what
+// was already open; the new files' pages all come in chosen.
+void Backend::join(const QList<Part> &parts, int generation) {
+    const QString target = m_work->filePath("in.pdf"), joined = m_work->filePath("joined.pdf");
+    std::optional<QList<int>> selection;
+    if (!m_parts.isEmpty()) {
+        QList<int> pages = m_selection;
+        int total = 0;
+        for (const auto &part : parts)
+            total += part.pages;
+        for (int page = pageCount() + 1; page <= total; ++page)
+            pages << page;
+        selection = pages;
+    }
+    auto finish = [=, this](int code, const QString &error) {
+        if (generation != m_loadGeneration)
+            return;
+        if (code != 0 || !QFileInfo::exists(joined))
+            return loadFailed(
+                tr("Could not join the files: %1").arg(error.isEmpty() ? tr("conversion failed") : error));
+        QFile::remove(target);
+        QFile::rename(joined, target);
+        m_parts = parts;
+        loadPdf(selection);
+    };
+    QFile::remove(joined);
+    if (parts.size() == 1) {
+        const bool copied = QFile::copy(parts.first().pdf, joined);
+        return finish(copied ? 0 : 1, copied ? QString() : tr("cannot read the file"));
+    }
+    QStringList arguments{"--warning-exit-0", "--no-warn", "--empty", "--pages"};
+    for (const auto &part : parts)
+        arguments << part.pdf;
+    run("qpdf", arguments << "--" << joined, finish);
+}
+
+void Backend::loadFailed(const QString &message) {
+    m_loading = false;
+    emit documentChanged();
+    setProblem(message);
+}
+
+QString Backend::fileName() const {
+    if (m_parts.size() == 1)
+        return m_parts.first().name;
+    return m_parts.isEmpty() ? QString() : tr("%n file(s)", "", m_parts.size());
+}
+
+QStringList Backend::fileNames() const {
+    QStringList names;
+    for (const auto &part : m_parts)
+        names << part.name;
+    return names;
+}
+
+QVariantList Backend::fileStarts() const {
+    QVariantList starts;
+    int page = 1;
+    for (const auto &part : m_parts) {
+        starts << page;
+        page += part.pages;
+    }
+    return starts;
+}
+
+void Backend::loadPdf(const std::optional<QList<int>> &selection) {
     const int generation = m_loadGeneration;
     const QString pdf = m_work->filePath("in.pdf");
     auto *info = new QProcess(this);
-    connect(info, &QProcess::finished, this, [this, info, generation, pdf](int code) {
+    connect(info, &QProcess::finished, this, [this, info, generation, pdf, selection](int code) {
         const QString out = QString::fromUtf8(info->readAllStandardOutput());
         info->deleteLater();
         if (generation != m_loadGeneration)
@@ -299,7 +567,7 @@ void Backend::loadPdf() {
 
         // Per-page sizes and rotations decide which pages turn for portrait paper.
         auto *detail = new QProcess(this);
-        connect(detail, &QProcess::finished, this, [this, detail, generation, pdf, pages] {
+        connect(detail, &QProcess::finished, this, [this, detail, generation, pdf, pages, selection] {
             const QString text = QString::fromUtf8(detail->readAllStandardOutput());
             detail->deleteLater();
             if (generation != m_loadGeneration)
@@ -322,30 +590,35 @@ void Backend::loadPdf() {
             }
             m_pageSizes = sizes;
             m_pageRotations = rotations;
-            setSelection(Planner::parseRange({}, pages));
+            QList<int> chosen = selection ? *selection : Planner::parseRange({}, pages);
+            chosen.removeIf([pages](int page) { return page < 1 || page > pages; });
+            setSelection(chosen);
             emit documentChanged();
 
             // Small renders for the sheet view; the window shows them at about
             // 150 px wide, and pdftoppm pads numbers by the page count's width.
-            QDir().mkpath(m_work->filePath("thumbs"));
+            // Each load renders into a folder of its own, so the window never
+            // shows a cached picture under a name that now means another page.
+            const QString thumbs = m_work->filePath(QStringLiteral("thumbs-%1").arg(generation));
+            QDir().mkpath(thumbs);
             // A grey set too, so black-and-white shows as it will print
             // without a shader effect.
-            auto list = [this](const QString &prefix) {
-                QStringList files = QDir(m_work->filePath("thumbs")).entryList({prefix + "-*.png"}, QDir::Files);
+            auto list = [thumbs](const QString &prefix) {
+                QStringList files = QDir(thumbs).entryList({prefix + "-*.png"}, QDir::Files);
                 QCollator collator;
                 collator.setNumericMode(true);
                 std::sort(files.begin(), files.end(), collator);
                 QStringList urls;
                 for (const auto &file : files)
-                    urls << QUrl::fromLocalFile(m_work->filePath("thumbs/" + file)).toString();
+                    urls << QUrl::fromLocalFile(thumbs + "/" + file).toString();
                 return urls;
             };
-            run("pdftoppm", {"-r", "40", "-png", pdf, m_work->filePath("thumbs/t")},
-                [this, generation, pdf, list](int, const QString &) {
+            run("pdftoppm", {"-r", "40", "-png", pdf, thumbs + "/t"},
+                [this, generation, pdf, thumbs, list](int, const QString &) {
                     if (generation != m_loadGeneration)
                         return;
-                    run("pdftoppm", {"-r", "40", "-png", "-gray", pdf, m_work->filePath("thumbs/g")},
-                        [this, generation, list](int, const QString &) {
+                    run("pdftoppm", {"-r", "40", "-png", "-gray", pdf, thumbs + "/g"},
+                        [this, generation, thumbs, list](int, const QString &) {
                             if (generation != m_loadGeneration)
                                 return;
                             m_thumbnails = list("t");
@@ -353,6 +626,10 @@ void Backend::loadPdf() {
                             m_loading = false;
                             emit documentChanged();
                             replan();
+                            const QDir work(m_work->path());
+                            for (const auto &old : work.entryList({"thumbs-*"}, QDir::Dirs))
+                                if (work.filePath(old) != thumbs)
+                                    QDir(work.filePath(old)).removeRecursively();
                         });
                 });
         });
@@ -372,7 +649,7 @@ void Backend::closeFile() {
         return;
     ++m_loadGeneration;
     m_work.reset();
-    m_fileName.clear();
+    m_parts.clear();
     m_pageSizes.clear();
     m_pageRotations.clear();
     m_thumbnails.clear();
@@ -519,6 +796,10 @@ void Backend::print() {
         setProblem(tr("No printer is set up in CUPS."));
         return;
     }
+    if (printerOffline()) {
+        setProblem(offlineProblem());
+        return;
+    }
     if (driverPpd().isEmpty()) {
         setProblem(tr("The Canon driver (cnijfilter-e400series) is not installed."));
         return;
@@ -625,7 +906,7 @@ void Backend::sendItem() {
                             m_jobPoll.start();
                         });
                         lp->start("lp", {"-d", m_printer, "-o", "raw", "-t",
-                                         QStringLiteral("pritingo %1 p%2").arg(m_fileName).arg(page), bin});
+                                         QStringLiteral("pritingo %1 p%2").arg(fileName()).arg(page), bin});
                     },
                     bin, env);
             });
@@ -707,7 +988,9 @@ void Backend::finishPass() {
     m_tick.stop();
     m_printerPoll.start();
     emit jobChanged();
-    notify(tr("Printing finished"), tr("%n page(s) of “%1” are ready.", "", m_items.size()).arg(m_fileName),
+    notify(tr("Printing finished"),
+           m_parts.size() == 1 ? tr("%n page(s) of “%1” are ready.", "", m_items.size()).arg(fileName())
+                               : tr("%n page(s) from %1 are ready.", "", m_items.size()).arg(fileName()),
            "complete");
 }
 
@@ -791,6 +1074,10 @@ void Backend::maintenance(const QString &kind) {
     const QString file = "/usr/share/cmdtocanonij/" + files.value(kind);
     if (!files.contains(kind) || !QFileInfo::exists(file)) {
         setProblem(tr("This printer has no maintenance commands."));
+        return;
+    }
+    if (printerOffline()) {
+        setProblem(offlineProblem());
         return;
     }
     // These files start with #CUPS-COMMAND, so CUPS routes them through the

@@ -32,7 +32,8 @@ its front and back on one A4 page at their real size, like a photocopy.
 > tek yüz ya da arkalı önlü, renkli ya da siyah-beyaz baskı yapan bir masaüstü
 > uygulamasıdır. Yazıcının çok sayfalı işlerde sayfa düşürme sorununu her
 > sayfayı ayrı iş olarak göndererek çözer; arkalı önlü baskıda kağıtları nasıl
-> çevireceğini adım adım gösterir. Camdan PDF'e ya da doğrudan kopyaya tarar;
+> çevireceğini adım adım gösterir. Birden çok dosyayı (PDF, Word, Excel,
+> resim) tek belgede birleştirip tek seferde basar. Camdan PDF'e ya da doğrudan kopyaya tarar;
 > kimlik kartı düzeni kartın iki yüzünü gerçek boyutunda tek A4 sayfaya
 > yerleştirir. Arayüz Türkçe ve İngilizce'dir.
 
@@ -63,6 +64,15 @@ should work as long as it has a CUPS queue, but this is untested.
 
 - **Opens almost anything**: PDF, Word, Excel, PowerPoint and LibreOffice
   documents (converted with LibreOffice), and pictures (JPEG, PNG, WebP, TIFF…). Drop a file on the window, press `O`, or run `pritingo file.pdf`.
+- **Many files as one document**: choose or drop several files at once and
+  they are joined by name (`1-form.xlsx`, `2-id.pdf`, … keep their order);
+  `Shift+O`, or dropping on the right half of an open document, adds more at
+  the end. `pritingo a.pdf b.docx` joins them in the order given. Each file's
+  first page shows its name, and the whole stack prints in one run, so a pile
+  of application papers goes out with one press of Space.
+- **Spreadsheets fit the paper's width**: a sheet wider than the page prints
+  scaled down to fit across, as many pages tall as it needs, instead of having
+  its right-hand columns cut off onto pages of their own.
 - **Page view**: every page as a thumbnail. Click one to leave it out,
   double-click to look closer. Thumbnails turn grey when you print in black
   and white, so you see what you will get.
@@ -97,6 +107,8 @@ should work as long as it has a CUPS queue, but this is untested.
   time (usually no paper, or an error light waiting for the Resume button), it
   says so in the window and in a notification.
 - **Printer status** in the top bar: connected, printing, or jobs waiting.
+  Pressing Print while a USB printer is off or unplugged sends nothing and
+  says so instead; the warning goes away as soon as the printer is back.
 - **Keyboard first**, with every action on a key (`?` shows them all).
 - Follows the **Omarchy theme** (accent color and window rounding) and the
   **Omarchy language** live; English and Turkish are included, and the ⋯ menu
@@ -143,7 +155,8 @@ bin/install    # builds a package from this checkout and installs it (makepkg -f
 
 ## Using it
 
-1. Open a file (drop it on the window, or press `O`).
+1. Open one or more files (drop them on the window, or press `O`; `Shift+O`
+   adds more at the end).
 2. Pick one-sided or two-sided, color or black & white, and anything else.
 3. Press Space (or **Print**).
 4. Two-sided: when the fronts are done, follow the steps on screen and press
@@ -159,7 +172,8 @@ settings → Second pass*.
 
 | Key | Action |
 | --- | --- |
-| `O` | Open a file |
+| `O` | Open files |
+| `Shift+O` | Add files at the end |
 | `Space` | Print, or continue with the backs |
 | `D` | One-sided / two-sided |
 | `C` | Black & white / color |
@@ -173,6 +187,13 @@ settings → Second pass*.
 | `Q` | Quit (asks while printing) |
 
 ## How it works
+
+Each file is turned into a PDF of its own (copied, `magick` for pictures,
+LibreOffice for documents), and `qpdf` joins them into the one document the
+window shows. Spreadsheets go through xlsx first: Pritingo unpacks it with
+`bsdtar`, sets every sheet to fit the paper's width (`fitToPage`,
+`fitToWidth="1"`, `fitToHeight="0"`, unless the sheet already fits itself to
+pages), and packs it again before LibreOffice lays it out.
 
 For each page, Pritingo:
 

@@ -17,7 +17,8 @@
 class FakePicker : public FilePicker {
 public:
     QString answer;
-    void open(const QString &, const QStringList &) override { emit picked(answer); }
+    QStringList answers;
+    void open(const QString &, const QStringList &) override { emit picked(answers.isEmpty() ? QStringList{answer} : answers); }
     void save(const QString &, const QString &) override { emit savePicked(answer); }
 };
 
@@ -130,7 +131,7 @@ private slots:
         picker.answer = pdf;
         Backend backend(&picker);
         backend.setOption("duplex", true);
-        backend.pickFile();
+        backend.pickFiles();
         QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
         QCOMPARE(backend.pageCount(), 3);
         QCOMPARE(backend.thumbnails().size(), 3);
@@ -146,6 +147,192 @@ private slots:
         backend.setRange("9");
         QVERIFY(!backend.rangeValid());
         backend.setOption("duplex", false);
+    }
+
+    void backendJoinsFilesInNameOrder()
+    {
+        if (QStandardPaths::findExecutable("pdfinfo").isEmpty() || QStandardPaths::findExecutable("magick").isEmpty()
+            || QStandardPaths::findExecutable("qpdf").isEmpty())
+            QSKIP("poppler, ImageMagick or qpdf missing");
+        QTemporaryDir dir;
+        const QString one = dir.filePath("1-one.pdf"), two = dir.filePath("2-two.pdf"),
+                      ten = dir.filePath("10-ten.png"), more = dir.filePath("more.pdf");
+        QVERIFY(magick({"-size", "842x595", "xc:white", one}));
+        QVERIFY(magick({"-size", "595x842", "xc:white", "xc:white", two}));
+        QVERIFY(magick({"-size", "300x400", "xc:white", ten}));
+        QVERIFY(magick({"-size", "595x842", "xc:white", "xc:white", more}));
+
+        // Numbers in names sort as numbers, whatever order the desktop gives.
+        FakePicker picker;
+        Backend backend(&picker);
+        backend.openFiles({ten, QUrl::fromLocalFile(two).toString(), one}, true);
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
+        QVERIFY2(backend.problem().isEmpty(), qPrintable(backend.problem()));
+        QCOMPARE(backend.fileNames(), (QStringList{"1-one.pdf", "2-two.pdf", "10-ten.png"}));
+        QCOMPARE(backend.fileStarts(), (QVariantList{1, 2, 4}));
+        QCOMPARE(backend.pageCount(), 4);
+        QCOMPARE(backend.thumbnails().size(), 4);
+        QCOMPARE(backend.landscapePages(), (QVariantList{1}));
+        QVERIFY(backend.fileName().contains("3"));
+
+        // Added files go at the end; a page left out stays out.
+        backend.togglePage(2);
+        picker.answers = {more};
+        backend.pickFilesToAdd();
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
+        QCOMPARE(backend.pageCount(), 6);
+        QCOMPARE(backend.thumbnails().size(), 6);
+        QCOMPARE(backend.selectedPages(), (QVariantList{1, 3, 4, 5, 6}));
+        QCOMPARE(backend.fileStarts(), (QVariantList{1, 2, 4, 5}));
+
+        // A file that will not open leaves the document as it was.
+        const QString broken = dir.filePath("broken.pdf");
+        write(broken, "not a pdf");
+        backend.addFiles({broken});
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
+        QVERIFY2(backend.problem().contains("broken.pdf"), qPrintable(backend.problem()));
+        QCOMPARE(backend.pageCount(), 6);
+        QCOMPARE(backend.fileNames().size(), 4);
+        backend.addFiles({dir.filePath("missing.pdf")});
+        QVERIFY(backend.problem().contains("missing.pdf"));
+
+        // Opening replaces the whole stack.
+        backend.openFiles({two});
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
+        QCOMPARE(backend.fileNames(), QStringList{"2-two.pdf"});
+        QCOMPARE(backend.fileName(), QString("2-two.pdf"));
+        QCOMPARE(backend.pageCount(), 2);
+        QCOMPARE(backend.selectedPages(), (QVariantList{1, 2}));
+    }
+
+    void sheetsFitThePaperWidth()
+    {
+        // As LibreOffice writes it: a fit that is switched off.
+        QString xml = Backend::fitSheetToWidth(
+            R"(<worksheet xmlns="m"><sheetPr filterMode="false"><pageSetUpPr fitToPage="false"/></sheetPr>)"
+            R"(<pageMargins left="0.7"/><pageSetup paperSize="9" scale="100" fitToWidth="1" fitToHeight="1"/></worksheet>)");
+        QCOMPARE(xml, QString(R"(<worksheet xmlns="m"><sheetPr filterMode="false"><pageSetUpPr fitToPage="1"/></sheetPr>)"
+                              R"(<pageMargins left="0.7"/><pageSetup fitToWidth="1" fitToHeight="0" paperSize="9" scale="100"/></worksheet>)"));
+
+        // As Excel writes it: a fixed scale and no pageSetUpPr.
+        xml = Backend::fitSheetToWidth(R"(<worksheet xmlns="m"><sheetPr><tabColor rgb="FF92D050"/></sheetPr>)"
+                                       R"(<pageMargins left="0.2"/><pageSetup paperSize="9" scale="44" r:id="rId1"/></worksheet>)");
+        QCOMPARE(xml, QString(R"(<worksheet xmlns="m"><sheetPr><tabColor rgb="FF92D050"/><pageSetUpPr fitToPage="1"/></sheetPr>)"
+                              R"(<pageMargins left="0.2"/><pageSetup fitToWidth="1" fitToHeight="0" paperSize="9" scale="44" r:id="rId1"/></worksheet>)"));
+
+        // Neither sheetPr nor pageSetup: both are added where they belong.
+        xml = Backend::fitSheetToWidth(R"(<worksheet xmlns="m"><dimension ref="A1"/><pageMargins left="1"/></worksheet>)");
+        QCOMPARE(xml, QString(R"(<worksheet xmlns="m"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1"/>)"
+                              R"(<pageMargins left="1"/><pageSetup fitToWidth="1" fitToHeight="0"/></worksheet>)"));
+
+        xml = Backend::fitSheetToWidth(R"(<worksheet><sheetPr codeName="Sheet1"/><pageMargins left="1"/></worksheet>)");
+        QVERIFY2(xml.startsWith(R"(<worksheet><sheetPr codeName="Sheet1"><pageSetUpPr fitToPage="1"/></sheetPr>)"),
+                 qPrintable(xml));
+
+        // The author's own fit, and XML this does not know, stay as they are.
+        const QString own = R"(<worksheet><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><pageSetup fitToHeight="2"/></worksheet>)";
+        QCOMPARE(Backend::fitSheetToWidth(own), own);
+        const QString prefixed = R"(<x:worksheet><x:pageMargins left="1"/></x:worksheet>)";
+        QCOMPARE(Backend::fitSheetToWidth(prefixed), prefixed);
+    }
+
+    void backendFitsWideSpreadsheets()
+    {
+        if (QStandardPaths::findExecutable("soffice").isEmpty() || QStandardPaths::findExecutable("bsdtar").isEmpty()
+            || QStandardPaths::findExecutable("pdfinfo").isEmpty())
+            QSKIP("LibreOffice, bsdtar or poppler missing");
+        QTemporaryDir dir;
+        // Thirty columns run over five pages across in LibreOffice's own layout.
+        QStringList wide, longRows;
+        for (int row = 0; row < 5; ++row) {
+            QStringList cells;
+            for (int column = 0; column < 30; ++column)
+                cells << QStringLiteral("column %1 r%2").arg(column).arg(row);
+            wide << cells.join(',');
+        }
+        for (int row = 0; row < 300; ++row)
+            longRows << QStringLiteral("row %1,value %1").arg(row);
+        write(dir.filePath("wide.csv"), wide.join('\n').toUtf8());
+        write(dir.filePath("long.csv"), longRows.join('\n').toUtf8());
+        QProcess soffice;
+        soffice.start("soffice", {"--headless", "--convert-to", "xlsx", "--outdir", dir.path(), dir.filePath("wide.csv"),
+                                  dir.filePath("long.csv")});
+        QVERIFY(soffice.waitForFinished(120000));
+        soffice.start("soffice", {"--headless", "--convert-to", "ods", "--outdir", dir.path(), dir.filePath("wide.csv")});
+        QVERIFY(soffice.waitForFinished(120000));
+
+        Backend backend;
+        backend.openFile(dir.filePath("wide.xlsx"));
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 120000);
+        QVERIFY2(backend.problem().isEmpty(), qPrintable(backend.problem()));
+        QCOMPARE(backend.pageCount(), 1);
+
+        // Other formats pass through xlsx and fit the same way.
+        backend.openFile(dir.filePath("wide.ods"));
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 120000);
+        QCOMPARE(backend.pageCount(), 1);
+
+        // A long sheet keeps its pages; only the width is fitted.
+        backend.openFile(dir.filePath("long.xlsx"));
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 120000);
+        QVERIFY2(backend.pageCount() > 1, qPrintable(QString::number(backend.pageCount())));
+    }
+
+    void fittingNeverWritesThroughALink()
+    {
+        if (QStandardPaths::findExecutable("bsdtar").isEmpty())
+            QSKIP("bsdtar missing");
+        // An xlsx whose worksheets folder is a link to a folder elsewhere.
+        QTemporaryDir dir;
+        const QString outside = dir.filePath("outside/sheet1.xml"), sheet = R"(<worksheet><pageMargins left="1"/></worksheet>)";
+        QVERIFY(QDir(dir.path()).mkpath("outside") && QDir(dir.path()).mkpath("src/xl"));
+        write(outside, sheet.toUtf8());
+        write(dir.filePath("src/[Content_Types].xml"), "x");
+        QVERIFY(QFile::link(dir.filePath("outside"), dir.filePath("src/xl/worksheets")));
+        QProcess bsdtar;
+        bsdtar.setWorkingDirectory(dir.filePath("src"));
+        bsdtar.start("bsdtar", {"--format", "zip", "-cf", dir.filePath("link.xlsx"), "[Content_Types].xml", "xl"});
+        QVERIFY(bsdtar.waitForFinished(20000));
+        QCOMPARE(bsdtar.exitCode(), 0);
+
+        Backend backend;
+        backend.openFile(dir.filePath("link.xlsx"));
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 120000);
+        QFile file(outside);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(file.readAll()), sheet);
+    }
+
+    void printingWaitsForThePrinter()
+    {
+        if (QStandardPaths::findExecutable("pdfinfo").isEmpty() || QStandardPaths::findExecutable("magick").isEmpty())
+            QSKIP("poppler or ImageMagick missing");
+        QTemporaryDir dir;
+        const QString pdf = dir.filePath("page.pdf"), usb = dir.filePath("usb");
+        QVERIFY(magick({"-size", "595x842", "xc:white", pdf}));
+        QVERIFY(QDir().mkpath(usb));
+
+        // No USB printer in the stand-in device list, and a queue name that
+        // exists nowhere, so nothing can ever reach a real printer.
+        FakePicker picker;
+        Backend backend(&picker, nullptr, usb);
+        QTRY_VERIFY_WITH_TIMEOUT(!backend.printer().isEmpty() || !backend.problem().isEmpty(), 10000);
+        backend.setPrinter("pritingo-test-offline");
+        backend.openFile(pdf);
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
+        QVERIFY(!backend.printerConnected());
+
+        backend.print();
+        QCOMPARE(backend.state(), QString("idle"));
+        QVERIFY2(backend.problem().contains("not connected"), qPrintable(backend.problem()));
+
+        // Plugging it in takes the warning away on the next look.
+        QSignalSpy toast(&backend, &Backend::toast);
+        QVERIFY(QDir().mkpath(usb + "/1-1:1.0"));
+        write(usb + "/1-1:1.0/bInterfaceClass", "07\n");
+        QTRY_VERIFY_WITH_TIMEOUT(backend.printerConnected(), 10000);
+        QVERIFY(backend.problem().isEmpty());
+        QCOMPARE(toast.size(), 1);
     }
 
     void optionsKeepTheirTypes()

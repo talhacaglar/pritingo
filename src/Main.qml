@@ -33,7 +33,13 @@ ApplicationWindow {
         if (backend.state === "flip") backend.continueAfterFlip()
         else if (backend.state === "done" || backend.state === "error") backend.dismiss()
         else if (backend.state === "idle" && backend.pageCount > 0) backend.print()
-        else if (backend.pageCount === 0) backend.pickFile()
+        else if (backend.pageCount === 0) backend.pickFiles()
+    }
+    // Dropped on the far half of an open document, files go at its end;
+    // anywhere else they replace it.
+    function dropAdds(x) {
+        const far = x > drop.width / 2
+        return backend.pageCount > 0 && !backend.loading && far !== (Qt.application.layoutDirection === Qt.RightToLeft)
     }
     function dismissTop() {
         if (helpVisible) helpVisible = false
@@ -56,7 +62,8 @@ ApplicationWindow {
     Shortcut { sequence: "Return"; enabled: !win.typing || backend.state === "idle"; context: Qt.ApplicationShortcut; onActivated: win.primary() }
     Shortcut { sequence: "Ctrl+P"; context: Qt.ApplicationShortcut; onActivated: win.scanOpen && !win.busy ? scanner.print() : win.primary() }
     Shortcut { sequence: "Escape"; context: Qt.ApplicationShortcut; onActivated: win.dismissTop() }
-    Shortcut { sequences: ["O", "Ctrl+O"]; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.pickFile() }
+    Shortcut { sequences: ["O", "Ctrl+O"]; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.pickFiles() }
+    Shortcut { sequences: ["Shift+O", "Ctrl+Shift+O"]; enabled: win.documentKeys && !win.busy && !backend.loading; context: Qt.ApplicationShortcut; onActivated: backend.pickFilesToAdd() }
     Shortcut { sequence: "D"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("duplex", !backend.options.duplex) }
     Shortcut { sequence: "C"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("color", !backend.options.color) }
     Shortcut { sequence: "V"; enabled: win.documentKeys; context: Qt.ApplicationShortcut; onActivated: win.view = win.view === "pages" ? "sheets" : "pages" }
@@ -96,8 +103,13 @@ ApplicationWindow {
                         anchors.fill: parent
                         enabled: !win.busy
                         onDropped: (event) => {
-                            if (event.hasUrls && event.urls.length > 0)
-                                backend.openFile(event.urls[0].toString())
+                            if (!event.hasUrls || event.urls.length === 0)
+                                return
+                            const urls = Array.from(event.urls, (url) => url.toString())
+                            if (win.dropAdds(event.x))
+                                backend.addFiles(urls, true)
+                            else
+                                backend.openFiles(urls, true)
                         }
                     }
 
@@ -115,17 +127,31 @@ ApplicationWindow {
                         onPreview: (page) => win.previewPage = page
                     }
 
-                    Rectangle {
+                    Row {
                         anchors.fill: parent
                         visible: drop.containsDrag && backend.pageCount > 0
-                        color: Qt.rgba(0, 0, 0, 0.55)
-                        border.color: theme.accent
-                        border.width: 2
-                        radius: theme.radius
-                        Label {
-                            anchors.centerIn: parent
-                            text: qsTr("Drop to replace the document")
-                            font.pixelSize: 22
+                        Repeater {
+                            // While a document is still opening, a drop can only replace it.
+                            model: backend.loading ? [qsTr("Drop to replace the document")]
+                                                   : [qsTr("Drop to replace the document"), qsTr("Drop to add at the end")]
+                            Rectangle {
+                                readonly property bool active: (index === 1) === win.dropAdds(drop.drag.x)
+                                width: parent.width / (backend.loading ? 1 : 2)
+                                height: parent.height
+                                color: Qt.rgba(0, 0, 0, active ? 0.7 : 0.4)
+                                border.color: active ? theme.accent : "transparent"
+                                border.width: 2
+                                radius: theme.radius
+                                Label {
+                                    anchors.centerIn: parent
+                                    width: parent.width - 48
+                                    horizontalAlignment: Text.AlignHCenter
+                                    wrapMode: Text.WordWrap
+                                    text: modelData
+                                    font.pixelSize: 22
+                                    opacity: parent.active ? 1 : 0.55
+                                }
+                            }
                         }
                     }
                 }

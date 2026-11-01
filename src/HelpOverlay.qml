@@ -10,7 +10,8 @@ Rectangle {
     MouseArea { anchors.fill: parent; onClicked: root.closed() }
 
     readonly property var keys: [
-        ["O", qsTr("Open a file")],
+        ["O", qsTr("Open files")],
+        ["Shift+O", qsTr("Add files at the end")],
         ["Space", qsTr("Print, continue with the backs, or scan")],
         ["D", qsTr("One-sided / two-sided")],
         ["C", qsTr("Black & white / color")],

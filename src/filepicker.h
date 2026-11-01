@@ -14,7 +14,7 @@ public:
     virtual void save(const QString &title, const QString &suggestedName) = 0;
 
 signals:
-    void picked(const QString &path);
+    void picked(const QStringList &paths);
     void savePicked(const QString &path);
     void failed(const QString &message);
 };
