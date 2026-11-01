@@ -181,6 +181,7 @@ settings → Second pass*.
 | `A` | Select every page |
 | `+` `-` | More / fewer copies |
 | `W` | Close the file |
+| `N` | New print: clear the pages and choose the next files (also on the *All done* screen) |
 | `S` | Scan from the glass (Space scans, `Ctrl+S` saves the PDF, `Ctrl+P` prints a copy, `C` black & white / color) |
 | `Esc` | Stop printing, close a panel |
 | `?` | Show the shortcuts |

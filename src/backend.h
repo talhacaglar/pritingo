@@ -122,6 +122,8 @@ public:
     Q_INVOKABLE void openFiles(const QStringList &pathsOrUrls, bool byName = false);
     Q_INVOKABLE void addFiles(const QStringList &pathsOrUrls, bool byName = false);
     Q_INVOKABLE void closeFile();
+    // Clears what was printed and asks for the next files.
+    Q_INVOKABLE void newPrint();
     Q_INVOKABLE void setOption(const QString &key, const QVariant &value);
     Q_INVOKABLE void resetAdvanced();
     Q_INVOKABLE void setRange(const QString &text);

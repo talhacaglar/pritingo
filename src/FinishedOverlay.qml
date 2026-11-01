@@ -89,6 +89,13 @@ Rectangle {
                     text: root.failed ? qsTr("Close") : qsTr("Great    ␣")
                     onClicked: backend.dismiss()
                 }
+                // Clears these pages and asks for the next files.
+                Button {
+                    visible: !root.failed
+                    flat: true
+                    text: qsTr("New print  (N)")
+                    onClicked: backend.newPrint()
+                }
                 Button {
                     flat: true
                     text: root.failed ? qsTr("Try again") : qsTr("Print again")

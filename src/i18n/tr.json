@@ -274,5 +274,8 @@
     "other": "%n sayfa hazır (%1)."
   },
   "The printer is not connected. Turn it on and check its USB cable, then try again.": "Yazıcı bağlı değil. Yazıcıyı aç ve USB kablosunu kontrol et, sonra tekrar dene.",
-  "The printer is connected": "Yazıcı bağlandı"
+  "The printer is connected": "Yazıcı bağlandı",
+  "New print  (N)": "Yeni baskı  (N)",
+  "New print…": "Yeni baskı…",
+  "New print: clear and choose new files": "Yeni baskı: temizle ve yeni dosya seç"
 }

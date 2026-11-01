@@ -107,6 +107,7 @@ Rectangle {
             Menu {
                 id: menu
                 y: parent.height
+                MenuItem { text: qsTr("New print…"); enabled: !win.busy && backend.pageCount > 0; onTriggered: backend.newPrint() }
                 MenuItem { text: qsTr("Open files…"); enabled: !win.busy; onTriggered: backend.pickFiles() }
                 MenuItem { text: qsTr("Add files at the end…"); enabled: !win.busy && !backend.loading && backend.pageCount > 0; onTriggered: backend.pickFilesToAdd() }
                 MenuItem { text: qsTr("Close the file"); enabled: !win.busy && backend.pageCount > 0; onTriggered: backend.closeFile() }

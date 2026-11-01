@@ -203,6 +203,16 @@ private slots:
         QCOMPARE(backend.fileName(), QString("2-two.pdf"));
         QCOMPARE(backend.pageCount(), 2);
         QCOMPARE(backend.selectedPages(), (QVariantList{1, 2}));
+
+        // A new print clears everything, copies too, and asks for files.
+        backend.setOption("copies", 3);
+        picker.answers = {one};
+        backend.newPrint();
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
+        QCOMPARE(backend.fileNames(), QStringList{"1-one.pdf"});
+        QCOMPARE(backend.pageCount(), 1);
+        QCOMPARE(backend.options().value("copies").toInt(), 1);
+        picker.answers.clear();
     }
 
     void sheetsFitThePaperWidth()

@@ -74,6 +74,7 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+S"; enabled: win.scanOpen; context: Qt.ApplicationShortcut; onActivated: scanner.save() }
     Shortcut { sequence: "C"; enabled: win.scanOpen && !win.typing && !scanner.busy; context: Qt.ApplicationShortcut; onActivated: scanner.setOption("color", !scanner.options.color) }
     Shortcut { sequence: "W"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.closeFile() }
+    Shortcut { sequence: "N"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.newPrint() }
 
     Item {
         anchors.fill: parent

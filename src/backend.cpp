@@ -661,6 +661,17 @@ void Backend::closeFile() {
     emit jobChanged();
 }
 
+void Backend::newPrint() {
+    if (m_state == "printing" || m_state == "flip")
+        return;
+    dismiss();
+    closeFile();
+    // Copies belong to the print that is done, like the files.
+    setOption("copies", 1);
+    setProblem({});
+    pickFiles();
+}
+
 QVariantList Backend::landscapePages() const {
     QVariantList pages;
     for (int i = 0; i < m_pageSizes.size(); ++i)

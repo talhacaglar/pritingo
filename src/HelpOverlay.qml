@@ -19,6 +19,7 @@ Rectangle {
         ["A", qsTr("Select every page")],
         ["+  −", qsTr("More / fewer copies")],
         ["W", qsTr("Close the file")],
+        ["N", qsTr("New print: clear and choose new files")],
         ["S", qsTr("Scan from the glass")],
         ["Ctrl+S", qsTr("Save the scans as PDF")],
         ["Esc", qsTr("Stop printing, close a panel")],
