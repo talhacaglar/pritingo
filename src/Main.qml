@@ -69,6 +69,12 @@ ApplicationWindow {
     Shortcut { sequence: "V"; enabled: win.documentKeys; context: Qt.ApplicationShortcut; onActivated: win.view = win.view === "pages" ? "sheets" : "pages" }
     Shortcut { sequence: "+"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("copies", Math.min(99, backend.options.copies + 1)) }
     Shortcut { sequence: "-"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.setOption("copies", Math.max(1, backend.options.copies - 1)) }
+    Shortcut {
+        sequence: "P"
+        enabled: win.documentKeys && !win.busy && backend.pageCount > 0
+        context: Qt.ApplicationShortcut
+        onActivated: win.previewPage = win.previewPage ? 0 : backend.selectedPages[0] || 1
+    }
     Shortcut { sequence: "A"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: backend.selectPages("all") }
     Shortcut { sequence: "S"; enabled: win.documentKeys && !win.busy; context: Qt.ApplicationShortcut; onActivated: win.scanOpen = true }
     Shortcut { sequence: "Ctrl+S"; enabled: win.scanOpen; context: Qt.ApplicationShortcut; onActivated: scanner.save() }
@@ -128,6 +134,8 @@ ApplicationWindow {
                         onPreview: (page) => win.previewPage = page
                     }
 
+                    PagePreview { anchors.fill: parent; page: win.previewPage; onClosed: win.previewPage = 0 }
+
                     Row {
                         anchors.fill: parent
                         visible: drop.containsDrag && backend.pageCount > 0
@@ -172,7 +180,6 @@ ApplicationWindow {
         PrintingOverlay { objectName: "printingOverlay"; anchors.fill: parent; visible: backend.state === "printing" }
         FlipOverlay { objectName: "flipOverlay"; anchors.fill: parent; visible: backend.state === "flip" }
         FinishedOverlay { objectName: "finishedOverlay"; anchors.fill: parent; visible: backend.state === "done" || backend.state === "error" }
-        PagePreview { anchors.fill: parent; page: win.previewPage; onClosed: win.previewPage = 0 }
         HelpOverlay { objectName: "helpOverlay"; anchors.fill: parent; visible: win.helpVisible; onClosed: win.helpVisible = false }
 
         // Problems stay until the next action clears them; toasts fade.

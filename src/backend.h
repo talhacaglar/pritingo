@@ -59,6 +59,9 @@ class Backend : public QObject {
     Q_PROPERTY(int backSheetCount READ backSheetCount NOTIFY planChanged)
     Q_PROPERTY(int pagesToPrint READ pagesToPrint NOTIFY planChanged)
     Q_PROPERTY(int estimateMinutes READ estimateMinutes NOTIFY planChanged)
+    Q_PROPERTY(int cutPages READ cutPages NOTIFY planChanged)
+    // Changes whenever placement() would answer differently.
+    Q_PROPERTY(int layoutRevision READ layoutRevision NOTIFY layoutChanged)
 
     // Job
     Q_PROPERTY(QString state READ state NOTIFY jobChanged)
@@ -103,6 +106,8 @@ public:
     int backSheetCount() const { return Planner::sheetsWithBacks(m_sheets); }
     int pagesToPrint() const;
     int estimateMinutes() const;
+    int cutPages() const;
+    int layoutRevision() const { return m_layoutRevision; }
 
     QString state() const { return m_state; }
     int pass() const { return m_pass; }
@@ -130,6 +135,10 @@ public:
     Q_INVOKABLE void togglePage(int page);
     Q_INVOKABLE void selectPages(const QString &which); // "all", "odd", "even", "none"
     Q_INVOKABLE void requestPreview(int page);
+    // How a page lies on the paper, for drawing it, in fractions of the sheet:
+    // x, y, width, height for the page, areaX, areaY, areaWidth, areaHeight for
+    // what the printer reaches, with aspect, percent, turned and cut.
+    Q_INVOKABLE QVariantMap placement(int page) const;
 
     Q_INVOKABLE void print();
     Q_INVOKABLE void continueAfterFlip();
@@ -148,6 +157,7 @@ signals:
     void optionsChanged();
     void selectionChanged();
     void planChanged();
+    void layoutChanged();
     void jobChanged();
     void previewReady(int page, const QString &url);
     void toast(const QString &message);
@@ -179,6 +189,9 @@ private:
     QString offlineProblem() const;
     void replan();
     void setSelection(const QList<int> &pages);
+    void resetScale();
+    void touchLayout();
+    Planner::Placement placementOf(int page, bool flipBack) const;
 
     void startPass(int pass);
     void sendItem();
@@ -212,6 +225,8 @@ private:
     QList<int> m_pageRotations;
     QStringList m_thumbnails;
     QStringList m_grayThumbnails;
+    QList<QRectF> m_inkBoxes;
+    int m_layoutRevision = 0;
     int m_loadGeneration = 0;
 
     QVariantMap m_options;

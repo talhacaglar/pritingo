@@ -63,6 +63,47 @@ Rectangle {
                     onPicked: (v) => backend.setOption("quality", v)
                 }
 
+                Caption { text: qsTr("Scale") }
+                Segmented {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 20; Layout.rightMargin: 20
+                    stretch: true
+                    model: [{ label: qsTr("Fit"), value: "fit" }, { label: qsTr("%1%").arg(100), value: "actual" },
+                            { label: qsTr("Full page"), value: "fill" }, { label: qsTr("Custom"), value: "custom" }]
+                    value: o.scaling
+                    onPicked: (v) => backend.setOption("scaling", v)
+                }
+                RowLayout {
+                    visible: o.scaling === "custom"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 20; Layout.rightMargin: 20
+                    Slider {
+                        Layout.fillWidth: true
+                        from: 25; to: 200; stepSize: 5
+                        value: o.scalePercent
+                        onMoved: backend.setOption("scalePercent", Math.round(value))
+                    }
+                    SpinBox {
+                        from: 25; to: 200; stepSize: 5
+                        value: o.scalePercent
+                        editable: true
+                        textFromValue: (value) => qsTr("%1%").arg(value)
+                        valueFromText: (text) => parseInt(text.replace(/\D/g, "")) || 100
+                        onValueModified: backend.setOption("scalePercent", value)
+                    }
+                }
+                Hint {
+                    text: o.scaling === "actual" ? qsTr("Every page at its real size, even where the printer cannot reach.")
+                        : o.scaling === "fill" ? qsTr("Margins dropped: what is on the page grows as large as the printer can reach.")
+                        : o.scaling === "custom" ? qsTr("A share of the page's real size, in the middle of the sheet.")
+                        : qsTr("Shrinks a page only when part of it would be lost at the sheet's edge.")
+                }
+                Hint {
+                    visible: backend.cutPages > 0
+                    color: "#e5484d"
+                    text: qsTr("%n page(s) will lose their edges. Fit keeps everything.", "", backend.cutPages)
+                }
+
                 Caption { text: qsTr("Pages") }
                 TextField {
                     id: range

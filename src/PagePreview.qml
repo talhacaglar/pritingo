@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 
-// A closer look at one page, rendered on demand.
+// A closer look at one sheet as it will print, rendered on demand. It sits
+// beside the settings, so a change there shows here at once.
 Rectangle {
     id: root
     property int page: 0
@@ -11,24 +12,35 @@ Rectangle {
 
     visible: page > 0
     color: Qt.rgba(0.04, 0.04, 0.05, 0.92)
-    onPageChanged: { source = ""; if (page > 0) backend.requestPreview(page) }
+    function load() { source = ""; if (page > 0) backend.requestPreview(page) }
+    onPageChanged: load()
 
     Connections {
         target: backend
         function onPreviewReady(page, url) { if (page === root.page) root.source = url }
+        // Black and white has a render of its own.
+        function onOptionsChanged() { if (root.page > 0) backend.requestPreview(root.page) }
     }
 
     MouseArea { anchors.fill: parent; onClicked: root.closed() }
 
-    Image {
-        id: image
+    // Room for the sheet above the page controls.
+    Item {
+        id: room
         anchors.fill: parent
-        anchors.margins: 40
-        anchors.bottomMargin: 70
-        fillMode: Image.PreserveAspectFit
-        source: root.source
+        anchors.margins: 24
+        anchors.bottomMargin: 66
+
+        SheetPaper {
+            id: sheet
+            anchors.centerIn: parent
+            width: Math.min(room.width, room.height / placed.aspect)
+            height: width * placed.aspect
+            page: root.page
+            source: root.source
+        }
     }
-    BusyIndicator { anchors.centerIn: parent; running: root.visible && image.status !== Image.Ready }
+    BusyIndicator { anchors.centerIn: parent; running: root.visible && sheet.status !== Image.Ready }
 
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -43,7 +55,10 @@ Rectangle {
         }
         Label {
             anchors.verticalCenter: parent.verticalCenter
+            color: sheet.placed.cut ? "#e5484d" : Material.foreground
             text: qsTr("Page %1 of %2").arg(root.page).arg(backend.pageCount)
+                  + "  ·  " + qsTr("%1%").arg(sheet.placed.percent)
+                  + (sheet.placed.cut ? "  ·  " + qsTr("edges cut") : "")
         }
         Button {
             text: "›"

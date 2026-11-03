@@ -345,6 +345,211 @@ private slots:
         QCOMPARE(toast.size(), 1);
     }
 
+    void paperKnowsThePrintersReach()
+    {
+        const auto a4 = Planner::paper("A4");
+        QCOMPARE(a4.size, QSizeF(595, 842));
+        // 47.34 points at the bottom are out of the E410's reach.
+        QVERIFY(qAbs(842 - a4.printable.bottom() - 47.34) < 0.01);
+        QVERIFY(qAbs(a4.printable.top() - 8.61) < 0.01);
+        QCOMPARE(Planner::paper("no such size").size, QSizeF(595, 842));
+    }
+
+    void inkBoxFindsTheMarks()
+    {
+        QImage page(100, 200, QImage::Format_RGB32);
+        page.fill(Qt::white);
+        QVERIFY(Planner::inkBox(page).isEmpty());
+        QCOMPARE(Planner::inkBox(QImage()), QRectF(0, 0, 1, 1));
+
+        for (int y = 50; y < 100; ++y)
+            for (int x = 20; x < 60; ++x)
+                page.setPixel(x, y, qRgb(0, 0, 0));
+        const QRectF box = Planner::inkBox(page);
+        QVERIFY(box.contains(QRectF(0.2, 0.25, 0.4, 0.25)));
+        QVERIFY(QRectF(0.18, 0.24, 0.44, 0.27).contains(box));
+
+        // Yellow is ink too, and scanned paper's grain is not.
+        page.fill(qRgb(250, 250, 250));
+        QVERIFY(Planner::inkBox(page).isEmpty());
+        page.setPixel(99, 199, qRgb(255, 255, 0));
+        QVERIFY(Planner::inkBox(page).contains(QPointF(0.99, 0.99)));
+    }
+
+    void inkBoxTurnsWithThePage()
+    {
+        const QRectF box(0.1, 0.2, 0.3, 0.4);
+        QCOMPARE(Planner::turned(box, 0), box);
+        // Clockwise: the page's left edge becomes the top.
+        QVERIFY(qFuzzyCompare(Planner::turned(box, 90).x(), 0.4));
+        QVERIFY(qFuzzyCompare(Planner::turned(box, 90).y(), 0.1));
+        QVERIFY(qFuzzyCompare(Planner::turned(box, 90).width(), 0.4));
+        QVERIFY(qFuzzyCompare(Planner::turned(box, 180).x(), 0.6));
+        QVERIFY(qFuzzyCompare(Planner::turned(box, 180).y(), 0.4));
+        QVERIFY(qFuzzyCompare(Planner::turned(box, 270).x(), 0.2));
+        QVERIFY(qFuzzyCompare(Planner::turned(box, 270).y(), 0.6));
+        QVERIFY(Planner::turned(QRectF(), 90).isEmpty());
+    }
+
+    void fitLeavesANormalPageAlone()
+    {
+        const auto a4 = Planner::paper("A4");
+        const auto placed = Planner::place({595, 842}, {0.1, 0.1, 0.8, 0.8}, a4, "fit", 100);
+        QCOMPARE(placed.scale, 1.0);
+        QCOMPARE(placed.page, QRectF(0, 0, 595, 842));
+        QVERIFY(!placed.cut);
+    }
+
+    void fitShrinksOnlyToSaveTheMarks()
+    {
+        // A form running down to 10 points above the sheet's edge.
+        const auto a4 = Planner::paper("A4");
+        const QRectF content(0.07, 0.013, 0.86, 0.975);
+        const auto placed = Planner::place({595, 842}, content, a4, "fit", 100);
+        QVERIFY(placed.scale < 0.98 && placed.scale > 0.94);
+        QVERIFY(!placed.cut);
+        const QRectF marks(placed.page.x() + content.x() * placed.page.width(),
+                           placed.page.y() + content.y() * placed.page.height(), content.width() * placed.page.width(),
+                           content.height() * placed.page.height());
+        QVERIFY(a4.printable.adjusted(-0.01, -0.01, 0.01, 0.01).contains(marks));
+    }
+
+    void fitFillsTheSheetWithSmallPages()
+    {
+        // A small picture grows to the sheet, as printing always did.
+        const auto placed = Planner::place({297.5, 421}, {0.4, 0.4, 0.2, 0.2}, Planner::paper("A4"), "fit", 100);
+        QCOMPARE(placed.scale, 2.0);
+        QCOMPARE(placed.page, QRectF(0, 0, 595, 842));
+    }
+
+    void actualSizeKeepsTheSizeAndSaysWhatItCuts()
+    {
+        const auto a4 = Planner::paper("A4");
+        auto placed = Planner::place({595, 842}, {0, 0.9, 1, 0.1}, a4, "actual", 100);
+        QCOMPARE(placed.scale, 1.0);
+        QCOMPARE(placed.page, QRectF(0, 0, 595, 842));
+        QVERIFY(placed.cut);
+        // A small page stays small, in the middle.
+        placed = Planner::place({200, 200}, {0.4, 0.4, 0.2, 0.2}, a4, "actual", 100);
+        QCOMPARE(placed.page, QRectF(197.5, 321, 200, 200));
+        QVERIFY(!placed.cut);
+    }
+
+    void fullPageGrowsTheMarksToTheReach()
+    {
+        const auto a4 = Planner::paper("A4");
+        const QRectF content(0.25, 0.25, 0.5, 0.5);
+        const auto placed = Planner::place({595, 842}, content, a4, "fill", 100);
+        QVERIFY(placed.scale > 1.8);
+        QVERIFY(!placed.cut);
+        const QPointF center(placed.page.x() + placed.page.width() / 2, placed.page.y() + placed.page.height() / 2);
+        QVERIFY(qAbs(center.x() - a4.printable.center().x()) < 0.01);
+        QVERIFY(qAbs(center.y() - a4.printable.center().y()) < 0.01);
+        // Nothing to grow on a blank page, and nothing to lose.
+        QVERIFY(!Planner::place({595, 842}, QRectF(), a4, "fill", 100).cut);
+    }
+
+    void customScaleIsAShareOfTheRealSize()
+    {
+        const auto a4 = Planner::paper("A4");
+        auto placed = Planner::place({595, 842}, {0.1, 0.1, 0.8, 0.8}, a4, "custom", 50);
+        QCOMPARE(placed.scale, 0.5);
+        QCOMPARE(placed.page, QRectF(148.75, 210.5, 297.5, 421));
+        QVERIFY(!placed.cut);
+        placed = Planner::place({595, 842}, {0, 0, 1, 1}, a4, "custom", 150);
+        QVERIFY(placed.cut);
+        QCOMPARE(Planner::place({595, 842}, {}, a4, "custom", 1).scale, 0.25);
+        QCOMPARE(Planner::place({595, 842}, {}, a4, "custom", 999).scale, 2.0);
+    }
+
+    void placingThePagePutsItWhereThePlanSays()
+    {
+        if (QStandardPaths::findExecutable("gs").isEmpty() || QStandardPaths::findExecutable("pdftoppm").isEmpty()
+            || QStandardPaths::findExecutable("magick").isEmpty())
+            QSKIP("ghostscript, poppler or ImageMagick missing");
+        QTemporaryDir dir;
+        const QString pdf = dir.filePath("page.pdf"), sheet = dir.filePath("sheet.pdf"), ps = dir.filePath("sheet.ps"),
+                      out = dir.filePath("sheet");
+        // The bottom half of a page, marked in black.
+        QVERIFY(magick({"-size", "595x842", "xc:white", "-fill", "black", "-draw", "rectangle 0,421 594,841",
+                        "-density", "72", "-units", "PixelsPerInch", pdf}));
+
+        const QSizeF paper(595, 842);
+        const Planner::Placement placed{0.5, QRectF(100, 200, 297.5, 421), false};
+        QProcess gs;
+        gs.start("gs", Planner::placeArguments(placed, paper, pdf, sheet));
+        QVERIFY(gs.waitForFinished(20000));
+        QCOMPARE(gs.exitCode(), 0);
+
+        // Through pdftops too, the way a page reaches the driver.
+        QProcess pdftops;
+        pdftops.start("pdftops", {"-paperw", "595", "-paperh", "842", sheet, ps});
+        QVERIFY(pdftops.waitForFinished(20000));
+        QCOMPARE(pdftops.exitCode(), 0);
+        QProcess render;
+        render.start("gs", {"-q", "-dBATCH", "-dNOPAUSE", "-dSAFER", "-sDEVICE=png16m", "-r72", "-g595x842",
+                            "-sOutputFile=" + out + ".png", ps});
+        QVERIFY(render.waitForFinished(20000));
+        QCOMPARE(render.exitCode(), 0);
+
+        const QImage image(out + ".png");
+        QCOMPARE(image.size(), QSize(595, 842));
+        const QRectF box = Planner::inkBox(image);
+        const QRectF expected(100 / 595.0, 410.5 / 842.0, 297.5 / 595.0, 210.5 / 842.0);
+        QVERIFY2(qAbs(box.x() - expected.x()) < 0.01 && qAbs(box.y() - expected.y()) < 0.01
+                     && qAbs(box.width() - expected.width()) < 0.01 && qAbs(box.height() - expected.height()) < 0.01,
+                 qPrintable(QStringLiteral("%1 %2 %3 %4").arg(box.x()).arg(box.y()).arg(box.width()).arg(box.height())));
+    }
+
+    void scaleFollowsWhatIsOnThePageAndEndsWithIt()
+    {
+        if (QStandardPaths::findExecutable("pdfinfo").isEmpty() || QStandardPaths::findExecutable("magick").isEmpty())
+            QSKIP("poppler or ImageMagick missing");
+        QTemporaryDir dir;
+        const QString low = dir.filePath("low.pdf"), landscape = dir.filePath("landscape.pdf");
+        // Marks from the top almost to the sheet's bottom edge, then a landscape page.
+        QVERIFY(magick({"-size", "595x842", "xc:white", "-fill", "black", "-draw", "rectangle 100,20 400,30", "-draw",
+                        "rectangle 100,825 400,835",
+                        "-density", "72", "-units", "PixelsPerInch", low}));
+        QVERIFY(magick({"-size", "842x595", "xc:white", "-fill", "black", "-draw", "rectangle 100,100 700,500",
+                        "-density", "72", "-units", "PixelsPerInch", landscape}));
+
+        FakePicker picker;
+        Backend backend(&picker);
+        backend.openFiles({low, landscape});
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
+
+        QVariantMap page = backend.placement(1);
+        QVERIFY(page["percent"].toInt() < 100);
+        QVERIFY(!page["cut"].toBool());
+        QCOMPARE(backend.cutPages(), 0);
+        QVERIFY(backend.placement(2)["turned"].toBool());
+
+        QSignalSpy layout(&backend, &Backend::layoutChanged);
+        backend.setOption("scaling", "actual");
+        QCOMPARE(layout.size(), 1);
+        page = backend.placement(1);
+        QCOMPARE(page["percent"].toInt(), 100);
+        QVERIFY(page["cut"].toBool());
+        QCOMPARE(backend.cutPages(), 1);
+        backend.togglePage(1);
+        QCOMPARE(backend.cutPages(), 0);
+        backend.togglePage(1);
+
+        backend.setOption("scaling", "custom");
+        backend.setOption("scalePercent", 50);
+        QCOMPARE(backend.placement(1)["percent"].toInt(), 50);
+        QCOMPARE(backend.cutPages(), 0);
+
+        // The next document starts over, and a new window does not remember.
+        Backend other(&picker);
+        QCOMPARE(other.options().value("scaling").toString(), QString("fit"));
+        backend.openFile(landscape);
+        QTRY_COMPARE_WITH_TIMEOUT(backend.loading(), false, 20000);
+        QCOMPARE(backend.options().value("scaling").toString(), QString("fit"));
+        QCOMPARE(backend.options().value("scalePercent").toInt(), 100);
+    }
+
     void optionsKeepTheirTypes()
     {
         Backend backend;

@@ -5,6 +5,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QUrl>
@@ -32,8 +33,11 @@ const QVariantMap Defaults{
     {"paperSize", "A4"},   {"brightness", "1.8"}, {"density", 0},       {"contrast", 0},
     {"cyan", 0},           {"magenta", 0},        {"yellow", 0},        {"cartridges", "bkcolor"},
     {"copies", 1},         {"reverseBacks", false}, {"flipBacks", false}, {"autoRotate", true},
-    {"sounds", true},
+    {"sounds", true},      {"scaling", "fit"},    {"scalePercent", 100},
 };
+
+// These belong to one print, not to the next document.
+const QStringList PerPrintKeys{"copies", "scaling", "scalePercent"};
 
 const QStringList AdvancedKeys{"brightness", "density", "contrast", "cyan", "magenta", "yellow", "cartridges"};
 
@@ -43,16 +47,6 @@ QStringList printablePatterns() {
     for (const auto &suffix : ImageSuffixes)
         patterns << "*." + suffix << "*." + suffix.toUpper();
     return patterns;
-}
-
-// Points for the driver's page sizes, portrait.
-QSizeF paperSize(const QString &name) {
-    static const QHash<QString, QSizeF> sizes{
-        {"A4", {595, 842}},  {"A5", {420, 595}},  {"B5", {516, 729}},       {"Letter", {612, 792}},
-        {"Legal", {612, 1008}}, {"4X6", {288, 432}}, {"5X7", {360, 504}},
-        {"envelop10p", {297, 684}}, {"envelopdlp", {312, 624}},
-    };
-    return sizes.value(name, {595, 842});
 }
 
 // Any USB interface of class 07 is a printer, whether or not usblp has it;
@@ -305,6 +299,8 @@ void Backend::load(const QStringList &pathsOrUrls, bool byName, bool append) {
         m_pageRotations.clear();
         m_thumbnails.clear();
         m_grayThumbnails.clear();
+        m_inkBoxes.clear();
+        resetScale();
     }
     m_loading = true;
     m_state = "idle";
@@ -623,7 +619,14 @@ void Backend::loadPdf(const std::optional<QList<int>> &selection) {
                                 return;
                             m_thumbnails = list("t");
                             m_grayThumbnails = list("g");
+                            // The renders are at hand, and unlike the PDF they
+                            // know what really shows: a white background or a
+                            // page's hidden leftovers are not marks.
+                            m_inkBoxes.clear();
+                            for (const auto &url : std::as_const(m_thumbnails))
+                                m_inkBoxes << Planner::inkBox(QImage(QUrl(url).toLocalFile()));
                             m_loading = false;
+                            touchLayout();
                             emit documentChanged();
                             replan();
                             const QDir work(m_work->path());
@@ -654,6 +657,8 @@ void Backend::closeFile() {
     m_pageRotations.clear();
     m_thumbnails.clear();
     m_grayThumbnails.clear();
+    m_inkBoxes.clear();
+    resetScale();
     m_loading = false;
     m_state = "idle";
     setSelection({});
@@ -709,10 +714,23 @@ void Backend::setOption(const QString &key, const QVariant &input) {
     if (!value.convert(Defaults.value(key).metaType()) || m_options.value(key) == value)
         return;
     m_options[key] = value;
-    if (key != "copies")
+    if (!PerPrintKeys.contains(key))
         m_settings.setValue("options/" + key, value);
     emit optionsChanged();
     replan();
+    touchLayout();
+}
+
+void Backend::resetScale() {
+    m_options["scaling"] = Defaults.value("scaling");
+    m_options["scalePercent"] = Defaults.value("scalePercent");
+    emit optionsChanged();
+    touchLayout();
+}
+
+void Backend::touchLayout() {
+    ++m_layoutRevision;
+    emit layoutChanged();
 }
 
 void Backend::resetAdvanced() {
@@ -790,8 +808,50 @@ int Backend::estimateMinutes() const {
     return std::max(1, int(std::ceil(pagesToPrint() * SecondsPerPage / 60.0)));
 }
 
+int Backend::cutPages() const {
+    return std::count_if(m_selection.begin(), m_selection.end(),
+                         [this](int page) { return placementOf(page, false).cut; });
+}
+
+Planner::Placement Backend::placementOf(int page, bool flipBack) const {
+    const QSizeF size = m_pageSizes.value(page - 1);
+    const int pageRotation = m_pageRotations.value(page - 1);
+    const int degrees = Planner::rotation(size.width(), size.height(), pageRotation,
+                                          m_options.value("autoRotate").toBool(), flipBack);
+    // The size is the one in the file; /Rotate and the turn both swap its sides.
+    const bool sideways = (((pageRotation % 180) + 180) % 180 == 90) != (degrees % 180 == 90);
+    return Planner::place(sideways ? size.transposed() : size,
+                          Planner::turned(m_inkBoxes.value(page - 1, QRectF(0, 0, 1, 1)), degrees),
+                          Planner::paper(m_options.value("paperSize").toString()),
+                          m_options.value("scaling").toString(), m_options.value("scalePercent").toInt());
+}
+
+// The window draws every page upright. A back that prints upside down differs
+// by how lopsided the printer's reach is, which only moves it a little.
+QVariantMap Backend::placement(int page) const {
+    const auto paper = Planner::paper(m_options.value("paperSize").toString());
+    const double width = paper.size.width(), height = paper.size.height();
+    QVariantMap map{{"aspect", height / width},
+                    {"areaX", paper.printable.x() / width},
+                    {"areaY", paper.printable.y() / height},
+                    {"areaWidth", paper.printable.width() / width},
+                    {"areaHeight", paper.printable.height() / height}};
+    const bool known = page >= 1 && page <= pageCount();
+    const auto placed = known ? placementOf(page, false) : Planner::Placement{1, QRectF(0, 0, width, height), false};
+    const QSizeF size = m_pageSizes.value(page - 1);
+    map["x"] = placed.page.x() / width;
+    map["y"] = placed.page.y() / height;
+    map["width"] = placed.page.width() / width;
+    map["height"] = placed.page.height() / height;
+    map["percent"] = int(std::round(placed.scale * 100));
+    map["cut"] = placed.cut;
+    map["turned"] = known && Planner::rotation(size.width(), size.height(), m_pageRotations.value(page - 1),
+                                               m_options.value("autoRotate").toBool(), false) == 90;
+    return map;
+}
+
 QSizeF Backend::paperPoints() const {
-    return paperSize(m_options.value("paperSize").toString());
+    return Planner::paper(m_options.value("paperSize").toString()).size;
 }
 
 // ---------------------------------------------------------------- printing
@@ -861,8 +921,9 @@ void Backend::sendItem() {
     const int degrees = Planner::rotation(m_pageSizes.value(page - 1).width(), m_pageSizes.value(page - 1).height(),
                                           m_pageRotations.value(page - 1), m_options.value("autoRotate").toBool(),
                                           back && m_options.value("flipBacks").toBool());
-    const QString pdf = m_work->filePath("page.pdf"), ps = m_work->filePath("page.ps"),
-                  bin = m_work->filePath("page.bin");
+    const Planner::Placement placed = placementOf(page, back && m_options.value("flipBacks").toBool());
+    const QString pdf = m_work->filePath("page.pdf"), sheet = m_work->filePath("sheet.pdf"),
+                  ps = m_work->filePath("page.ps"), bin = m_work->filePath("page.bin");
     const int generation = m_jobGeneration;
     auto alive = [this, generation] { return generation == m_jobGeneration && m_state == "printing"; };
 
@@ -879,48 +940,54 @@ void Backend::sendItem() {
         if (code != 0)
             return fail(tr("Could not prepare page %1: %2").arg(page).arg(error));
         const QSizeF paper = paperPoints();
-        run("pdftops", {"-paperw", QString::number(int(paper.width())), "-paperh",
-                        QString::number(int(paper.height())), "-expand", pdf, ps},
-            [=, this](int code, const QString &error) {
-                if (!alive())
-                    return;
-                if (code != 0)
-                    return fail(tr("Could not prepare page %1: %2").arg(page).arg(error));
+        run("gs", Planner::placeArguments(placed, paper, pdf, sheet), [=, this](int code, const QString &error) {
+            if (!alive())
+                return;
+            if (code != 0)
+                return fail(tr("Could not prepare page %1: %2").arg(page).arg(error));
+            run("pdftops", {"-paperw", QString::number(int(paper.width())), "-paperh",
+                            QString::number(int(paper.height())), sheet, ps},
+                [=, this](int code, const QString &error) {
+                    if (!alive())
+                        return;
+                    if (code != 0)
+                        return fail(tr("Could not prepare page %1: %2").arg(page).arg(error));
 
-                auto env = QProcessEnvironment::systemEnvironment();
-                env.insert("PPD", driverPpd());
-                env.insert("DEVICE_URI", m_deviceUri.isEmpty() ? "usb://" : m_deviceUri);
-                setStep(tr("Rendering page %1").arg(page));
-                run("/usr/lib/cups/filter/pstocanonij",
-                    {"1", qEnvironmentVariable("USER"), "pritingo", "1", Planner::driverOptions(m_options), ps},
-                    [=, this](int code, const QString &) {
-                        if (!alive())
-                            return;
-                        if (code != 0 || QFileInfo(bin).size() == 0)
-                            return fail(tr("The Canon driver could not render page %1.").arg(page));
-                        setStep(tr("Sending page %1").arg(page));
-                        auto *lp = new QProcess(this);
-                        m_running << lp;
-                        connect(lp, &QProcess::finished, this, [=, this](int code) {
-                            m_running.removeAll(lp);
-                            const QString out = QString::fromUtf8(lp->readAllStandardOutput());
-                            const QString error = QString::fromUtf8(lp->readAllStandardError()).trimmed();
-                            lp->deleteLater();
+                    auto env = QProcessEnvironment::systemEnvironment();
+                    env.insert("PPD", driverPpd());
+                    env.insert("DEVICE_URI", m_deviceUri.isEmpty() ? "usb://" : m_deviceUri);
+                    setStep(tr("Rendering page %1").arg(page));
+                    run("/usr/lib/cups/filter/pstocanonij",
+                        {"1", qEnvironmentVariable("USER"), "pritingo", "1", Planner::driverOptions(m_options), ps},
+                        [=, this](int code, const QString &) {
                             if (!alive())
                                 return;
-                            const auto id = QRegularExpression(R"(request id is (\S+))").match(out);
-                            if (code != 0 || !id.hasMatch())
-                                return fail(tr("CUPS refused the page: %1").arg(error));
-                            m_jobId = id.captured(1);
-                            m_waitingForUsb = false;
-                            setStep(tr("Printing page %1").arg(page));
-                            m_jobPoll.start();
-                        });
-                        lp->start("lp", {"-d", m_printer, "-o", "raw", "-t",
-                                         QStringLiteral("pritingo %1 p%2").arg(fileName()).arg(page), bin});
-                    },
-                    bin, env);
-            });
+                            if (code != 0 || QFileInfo(bin).size() == 0)
+                                return fail(tr("The Canon driver could not render page %1.").arg(page));
+                            setStep(tr("Sending page %1").arg(page));
+                            auto *lp = new QProcess(this);
+                            m_running << lp;
+                            connect(lp, &QProcess::finished, this, [=, this](int code) {
+                                m_running.removeAll(lp);
+                                const QString out = QString::fromUtf8(lp->readAllStandardOutput());
+                                const QString error = QString::fromUtf8(lp->readAllStandardError()).trimmed();
+                                lp->deleteLater();
+                                if (!alive())
+                                    return;
+                                const auto id = QRegularExpression(R"(request id is (\S+))").match(out);
+                                if (code != 0 || !id.hasMatch())
+                                    return fail(tr("CUPS refused the page: %1").arg(error));
+                                m_jobId = id.captured(1);
+                                m_waitingForUsb = false;
+                                setStep(tr("Printing page %1").arg(page));
+                                m_jobPoll.start();
+                            });
+                            lp->start("lp", {"-d", m_printer, "-o", "raw", "-t",
+                                             QStringLiteral("pritingo %1 p%2").arg(fileName()).arg(page), bin});
+                        },
+                        bin, env);
+                });
+        });
     });
 }
 

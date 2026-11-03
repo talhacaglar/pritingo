@@ -16,6 +16,7 @@ Rectangle {
         ["D", qsTr("One-sided / two-sided")],
         ["C", qsTr("Black & white / color")],
         ["V", qsTr("Pages / sheets view")],
+        ["P", qsTr("Preview the sheet as it will print")],
         ["A", qsTr("Select every page")],
         ["+  −", qsTr("More / fewer copies")],
         ["W", qsTr("Close the file")],

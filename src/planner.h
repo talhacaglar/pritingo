@@ -1,7 +1,11 @@
 #pragma once
 
+#include <QImage>
 #include <QList>
+#include <QRectF>
+#include <QSizeF>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 
 // The pure part of printing: which pages go on which sheet, in what order each
@@ -45,5 +49,44 @@ QString driverOptions(const QVariantMap &settings);
 // page turns 90 when autoRotate is on, and a back turns another 180 when the
 // user flips the stack end over end.
 int rotation(double width, double height, int pageRotation, bool autoRotate, bool flipBack);
+
+// A sheet in points, portrait, with the part the printer can reach. Rectangles
+// here count from the sheet's top left, the way the window draws it.
+struct Paper {
+    QSizeF size;
+    QRectF printable;
+};
+
+// The driver's page sizes and printable areas (its PPD's ImageableArea).
+Paper paper(const QString &name);
+
+// Where a page lands: its whole box on the sheet, which may reach past the
+// sheet's edges, the scale from its own size, and whether anything on it falls
+// outside what the printer can reach.
+struct Placement {
+    double scale = 1;
+    QRectF page;
+    bool cut = false;
+};
+
+// Where the marks are on a rendered page, as fractions of its size: empty for
+// a blank page, the whole page when the render is missing.
+QRectF inkBox(const QImage &render);
+
+// A box of fractions as it lies once its page has turned clockwise.
+QRectF turned(const QRectF &box, int degrees);
+
+// Lays a page, already turned the way it prints, on a sheet. content is
+// inkBox's answer for it. The modes:
+//   "fit"    fills the sheet like any page, then shrinks only if that would
+//            lose marks, so a page with normal margins stays at its real size
+//   "actual" its real size, centered, whatever that cuts
+//   "fill"   the marks as large as the printable area allows, margins dropped
+//   "custom" percent of its real size, centered, whatever that cuts
+Placement place(const QSizeF &page, const QRectF &content, const Paper &paper, const QString &mode, int percent);
+
+// Ghostscript's arguments for rewriting a one-page PDF onto a sheet of its own
+// with the page where the placement says.
+QStringList placeArguments(const Placement &placement, const QSizeF &paper, const QString &input, const QString &output);
 
 } // namespace Planner

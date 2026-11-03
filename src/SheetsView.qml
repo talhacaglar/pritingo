@@ -29,11 +29,17 @@ Item {
                 onPicked: (v) => root.modeRequested(v)
             }
 
+            Button {
+                flat: true
+                text: qsTr("Preview") + "   P"
+                onClicked: root.preview(root.selected.length ? root.selected[0] : 1)
+            }
+
             // Takes whatever room is left when the window is tiled narrow:
             // wraps to two lines, then elides, and never runs under the panel.
             Label {
                 Layout.fillWidth: true
-                visible: root.width > 420
+                visible: root.width > 560
                 color: win.muted
                 font.pixelSize: 13
                 horizontalAlignment: Text.AlignRight
@@ -84,35 +90,22 @@ Item {
         property bool included: true
         property bool showNumber: true
 
-        Rectangle {
+        SheetPaper {
             id: paper
             anchors.centerIn: parent
-            width: Math.min(parent.width, parent.height / 1.414)
-            height: width * 1.414
-            color: "white"
+            width: Math.min(parent.width, parent.height / placed.aspect)
+            height: width * placed.aspect
+            page: thumb.page
+            source: thumb.page > 0
+                    ? ((backend.options.color ? backend.thumbnails : backend.grayThumbnails)[thumb.page - 1] || "")
+                    : ""
             radius: Math.min(3, theme.radius)
             opacity: thumb.included ? 1 : 0.28
             Behavior on opacity { NumberAnimation { duration: 140 } }
 
-            Image {
-                id: image
-                anchors.fill: parent
-                anchors.margins: 1
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
-                source: thumb.page > 0
-                        ? ((backend.options.color ? backend.thumbnails : backend.grayThumbnails)[thumb.page - 1] || "")
-                        : ""
-                // The thumbnail renders the page as authored; a landscape page
-                // that will turn shows turned, so this is the sheet as printed.
-                rotation: root.landscape.indexOf(thumb.page) >= 0 && backend.options.autoRotate ? 90 : 0
-                // Turned, the fitted landscape page is as tall as the paper is
-                // wide; growing it by the A-series ratio fills the sheet again.
-                scale: rotation ? 1.414 : 1
-            }
             BusyIndicator {
                 anchors.centerIn: parent
-                running: image.status !== Image.Ready
+                running: paper.status !== Image.Ready
                 visible: running
                 Material.accent: "#999"
             }
@@ -152,6 +145,7 @@ Item {
             readonly property int page: parent ? parent.pageNumber : 0
             readonly property bool included: root.selected.indexOf(page) >= 0
             readonly property int file: root.named ? backend.fileStarts.indexOf(page) : -1
+            readonly property var placed: { backend.layoutRevision; return backend.placement(page) }
 
             Label {
                 visible: parent.file >= 0
@@ -175,11 +169,16 @@ Item {
             Label {
                 anchors.bottom: parent.bottom
                 anchors.horizontalCenter: parent.horizontalCenter
-                color: win.muted
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                color: parent.included && parent.placed.cut ? "#e5484d" : win.muted
                 font.pixelSize: 12
                 text: !parent.included ? qsTr("left out · click to add back")
-                    : root.landscape.indexOf(parent.page) >= 0 && backend.options.autoRotate ? qsTr("turns to fit")
-                    : ""
+                    : qsTr("%1%").arg(parent.placed.percent)
+                      + (parent.placed.cut ? " · " + qsTr("edges cut")
+                         : root.landscape.indexOf(parent.page) >= 0 && backend.options.autoRotate ? " · " + qsTr("turns to fit")
+                         : "")
             }
             MouseArea {
                 anchors.fill: parent

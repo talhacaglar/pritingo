@@ -42,5 +42,9 @@
   "%n page(s) from %1 are ready.": {
     "one": "%n page from %1 is ready.",
     "other": "%n pages from %1 are ready."
+  },
+  "%n page(s) will lose their edges. Fit keeps everything.": {
+    "one": "%n page will lose its edges. Fit keeps everything.",
+    "other": "%n pages will lose their edges. Fit keeps everything."
   }
 }

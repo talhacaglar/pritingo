@@ -279,5 +279,21 @@
   "New print…": "Yeni baskı…",
   "New print: clear and choose new files": "Yeni baskı: temizle ve yeni dosya seç",
   "New print": "Yeni baskı",
-  "Clear these pages and choose new files  (N)": "Bu sayfaları temizle ve yeni dosya seç  (N)"
+  "Clear these pages and choose new files  (N)": "Bu sayfaları temizle ve yeni dosya seç  (N)",
+  "Scale": "Ölçek",
+  "Fit": "Sığdır",
+  "Full page": "Tam sayfa",
+  "Custom": "Özel",
+  "%1%": "%%1",
+  "Preview": "Önizleme",
+  "edges cut": "kenarlar kesilir",
+  "Preview the sheet as it will print": "Kağıdı çıkacağı gibi önizle",
+  "Every page at its real size, even where the printer cannot reach.": "Her sayfa gerçek boyutunda, yazıcının ulaşamadığı yerler kesilse de.",
+  "Margins dropped: what is on the page grows as large as the printer can reach.": "Kenar boşlukları atılır: sayfadakiler yazıcının ulaşabildiği kadar büyür.",
+  "A share of the page's real size, in the middle of the sheet.": "Sayfanın gerçek boyutuna oranla, kağıdın ortasında.",
+  "Shrinks a page only when part of it would be lost at the sheet's edge.": "Sayfayı yalnızca kenarda bir kısmı kesilecekse küçültür.",
+  "%n page(s) will lose their edges. Fit keeps everything.": {
+    "one": "%n sayfanın kenarı kesilecek. Sığdır hepsini korur.",
+    "other": "%n sayfanın kenarı kesilecek. Sığdır hepsini korur."
+  }
 }

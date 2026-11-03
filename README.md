@@ -85,6 +85,16 @@ should work as long as it has a CUPS queue, but this is untested.
 - **Paper**: A4, A5, B5, Letter, Legal, 10×15 and 13×18 photo, DL and #10
   envelopes; plain, glossy and Plus Glossy II photo paper.
 - **Landscape pages turn** to fit portrait paper automatically.
+- **Scale**, for one print at a time, shown live on every page and in the
+  large preview (`P`), which draws the sheet with the rim the printer cannot
+  reach tinted, and frames it in red when something will be lost there:
+  - **Fit** (the default) shrinks a page only when part of it would fall
+    outside what the printer reaches. A page with normal margins stays at its
+    real size.
+  - **100%** keeps the real size, whatever that cuts.
+  - **Full page** drops the margins and grows what is on the page as large as
+    the printer reaches.
+  - **Custom** is 25–200% of the real size, in the middle of the sheet.
 - **More settings**: tone (light/normal/dark), intensity, contrast,
   cyan / magenta / yellow balance, which cartridges to use (black and color,
   black only, color only).
@@ -178,6 +188,7 @@ settings → Second pass*.
 | `D` | One-sided / two-sided |
 | `C` | Black & white / color |
 | `V` | Pages / sheets view |
+| `P` | Preview the sheet as it will print |
 | `A` | Select every page |
 | `+` `-` | More / fewer copies |
 | `W` | Close the file |
@@ -200,12 +211,19 @@ For each page, Pritingo:
 
 1. extracts the page with `qpdf` (turning it 90° if it is landscape, and 180°
    for a back when *Turn backs upside down* is on),
-2. converts it to PostScript at the chosen paper size with `pdftops`,
-3. renders it with Canon's `pstocanonij` filter and the chosen options
+2. rewrites it onto a sheet of the chosen paper size at the chosen scale with
+   Ghostscript's `pdfwrite`,
+3. converts that to PostScript with `pdftops`,
+4. renders it with Canon's `pstocanonij` filter and the chosen options
    (`CNGrayscale`, `CNQuality`, `MediaType`, `PageSize`, `CNGamma`, …),
-4. sends the result with `lp -o raw`,
-5. waits for the job to leave the queue and the printer to settle, then moves
+5. sends the result with `lp -o raw`,
+6. waits for the job to leave the queue and the printer to settle, then moves
    on.
+
+Scaling needs to know where the marks on a page are, which the PDF does not
+say plainly: a white background counts as drawing, and a page can hide things.
+So Pritingo reads them off the page's thumbnail, and takes the printer's reach
+from the driver's `ImageableArea` values.
 
 The original file is never modified; everything happens on a copy in a
 private temporary directory.
@@ -223,6 +241,8 @@ into place.
 - Only the Canon E400-series driver is wired in (see *Supported printers*).
 - A page takes about 30 seconds including the pause between jobs, so long
   documents take a while. The pause is what makes every page come out.
+- The driver has no borderless sizes, so **Full page** stops at what the
+  printer reaches: about 17 mm short of the bottom edge and 3–5 mm short of the others.
 - The driver cannot report paper-out or ink levels; Pritingo can only notice
   that a page is taking unusually long.
 - The order and orientation for the second pass depend on how you put the
